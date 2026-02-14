@@ -50,16 +50,17 @@ public class SecurityConfig {
                         // Stripe webhook (public callback)
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
 
-                        // Stripe config (authenticated users need publishable key)
-                        .requestMatchers(HttpMethod.GET, "/api/payments/config").authenticated()
-
                         // Admin-only endpoints
                         .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERUSER")
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERUSER")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERUSER")
 
-                        // Everything else requires authentication
-                        .anyRequest().authenticated()
+                        // Registration and payment endpoints require authentication (user identity needed)
+                        .requestMatchers("/api/registrations/**").authenticated()
+                        .requestMatchers("/api/payments/**").authenticated()
+
+                        // Everything else is public
+                        .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
