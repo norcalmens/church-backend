@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: retreat-backend
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/retreat_db?useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DATABASE_USERNAME:root}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+  mail:
+    host: ${MAIL_HOST:smtp.mailtrap.io}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+server:
+  port: ${PORT:8080}
+
+# JWT Configuration (expiration in milliseconds)
+jwt:
+  secret: ${JWT_SECRET:dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1taW4tNjQtYnl0ZXMtbG9uZw==}
+  access-token-expiration: 900000
+  refresh-token-expiration: 604800000
+
+# Stripe Configuration
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+
+# App Configuration
+app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:4200}
+
+# Retreat Configuration
+retreat:
+  year: 2026
+  cost-per-person: 240.00
+  max-attendees: 200
+  contact-email: ${RETREAT_CONTACT_EMAIL:}
