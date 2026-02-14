@@ -72,6 +72,12 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:*",
                 "http://127.0.0.1:*",
+                "https://norcalmensretreat.com",
+                "https://www.norcalmensretreat.com",
+                "https://norcalmensretreat.org",
+                "https://www.norcalmensretreat.org",
+                "https://norcalmensretreat.net",
+                "https://www.norcalmensretreat.net",
                 "https://*.up.railway.app"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
