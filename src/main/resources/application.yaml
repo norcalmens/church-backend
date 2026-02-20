@@ -18,15 +18,15 @@ spring:
         format_sql: true
 
   mail:
-    host: ${MAIL_HOST:smtp.mailtrap.io}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    host: ${MAIL_HOST:smtp.resend.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:resend}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
           auth: true
-          starttls:
+          ssl:
             enable: true
 
   servlet:
@@ -54,8 +54,11 @@ app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:4200}
 
 # Retreat Configuration
+mail:
+  from: ${MAIL_FROM:noreply@norcalmensretreat.com}
+
 retreat:
   year: 2026
-  cost-per-person: 240.00
+  cost-per-person: 288.00
   max-attendees: 200
   contact-email: ${RETREAT_CONTACT_EMAIL:}

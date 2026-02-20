@@ -17,7 +17,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${spring.mail.username}")
+    @Value("${mail.from:noreply@norcalmensretreat.com}")
     private String fromEmail;
 
     @Value("${retreat.contact-email:}")
@@ -133,7 +133,7 @@ public class EmailService {
         body.append("  Total Amount: $").append(reg.getTotalAmount()).append("\n");
         body.append("  Payment Status: ").append(reg.getPaymentStatus()).append("\n\n");
         body.append("Event Details:\n");
-        body.append("  Dates: April 16-18, 2026\n");
+        body.append("  Dates: June 11-13, 2026\n");
         body.append("  Venue: Alliance Redwoods, 5000 Bohemian Highway, Occidental, CA 95465\n\n");
         body.append("If you have any questions, please contact us.\n\n");
         body.append("— NorCal Men's Retreat 2026");
@@ -161,7 +161,7 @@ public class EmailService {
         body.append("  Amount: $").append(reg.getTotalAmount()).append("\n");
         body.append("  Payment ID: ").append(paymentId).append("\n");
         body.append("  Status: Paid\n\n");
-        body.append("We look forward to seeing you April 16-18, 2026!\n\n");
+        body.append("We look forward to seeing you June 11-13, 2026!\n\n");
         body.append("— NorCal Men's Retreat 2026");
 
         message.setText(body.toString());
