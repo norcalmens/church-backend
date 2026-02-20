@@ -11,7 +11,8 @@ import org.springframework.context.annotation.Configuration;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -22,6 +23,7 @@ import java.util.Set;
 public class DataSeeder {
 
     private final RoleRepository roleRepository;
+    private final PlatformTransactionManager transactionManager;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -29,12 +31,12 @@ public class DataSeeder {
     @Bean
     public CommandLineRunner seedRolesAndPermissions() {
         return args -> {
-            seedPermissionsAndRoles();
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.executeWithoutResult(status -> seedPermissionsAndRoles());
         };
     }
 
-    @Transactional
-    public void seedPermissionsAndRoles() {
+    private void seedPermissionsAndRoles() {
         if (roleRepository.existsByName("ADMIN")) {
             log.info("Roles already exist, skipping seed");
             return;
