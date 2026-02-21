@@ -1,12 +1,14 @@
 package com.norcalretreat.backend.controller;
 
 import com.norcalretreat.backend.dto.ApiResponse;
+import com.norcalretreat.backend.dto.PaymentResponse;
 import com.norcalretreat.backend.dto.RegistrationDTO;
 import com.norcalretreat.backend.entity.User;
 import com.norcalretreat.backend.repository.UserRepository;
 import com.norcalretreat.backend.service.RegistrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,11 +33,35 @@ public class RegistrationController {
     @PostMapping
     public ResponseEntity<ApiResponse<RegistrationDTO>> createRegistration(@RequestBody RegistrationDTO dto) {
         try {
-            Long userId = getCurrentUserId();
+            Long userId = getCurrentUserIdOrNull();
             RegistrationDTO created = registrationService.createRegistration(dto, userId);
             return ResponseEntity.ok(ApiResponse.success("Registration created successfully", created));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/payment-intent")
+    public ResponseEntity<ApiResponse<PaymentResponse>> createPaymentIntent(@PathVariable Long id) {
+        try {
+            PaymentResponse response = registrationService.createPaymentIntent(id);
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Payment processing error: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/confirm-payment")
+    public ResponseEntity<ApiResponse<RegistrationDTO>> confirmPayment(@PathVariable Long id) {
+        try {
+            RegistrationDTO updated = registrationService.confirmPayment(id);
+            return ResponseEntity.ok(ApiResponse.success("Payment confirmed", updated));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Payment verification error: " + e.getMessage()));
         }
     }
 
@@ -90,5 +116,18 @@ public class RegistrationController {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         return user.getId();
+    }
+
+    private Long getCurrentUserIdOrNull() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+                return null;
+            }
+            String username = auth.getName();
+            return userRepository.findByUsername(username).map(User::getId).orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

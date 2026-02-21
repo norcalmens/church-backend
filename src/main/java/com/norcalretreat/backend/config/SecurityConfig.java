@@ -50,6 +50,9 @@ public class SecurityConfig {
                         // Stripe webhook (public callback)
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
 
+                        // Stripe config (needed by frontend before login)
+                        .requestMatchers(HttpMethod.GET, "/api/payments/config").permitAll()
+
                         // Menu config (GET is public, PUT is admin-only)
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERUSER")
@@ -59,7 +62,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERUSER")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERUSER")
 
-                        // Registration and payment endpoints require authentication (user identity needed)
+                        // Public registration endpoints (anonymous registration flow)
+                        .requestMatchers(HttpMethod.POST, "/api/registrations").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/registrations/*/payment-intent").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/registrations/*/confirm-payment").permitAll()
+
+                        // Remaining registration and payment endpoints require authentication
                         .requestMatchers("/api/registrations/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
 

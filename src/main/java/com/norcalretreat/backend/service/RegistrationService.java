@@ -1,10 +1,14 @@
 package com.norcalretreat.backend.service;
 
 import com.norcalretreat.backend.dto.AttendeeDTO;
+import com.norcalretreat.backend.dto.PaymentResponse;
 import com.norcalretreat.backend.dto.RegistrationDTO;
 import com.norcalretreat.backend.entity.Attendee;
 import com.norcalretreat.backend.entity.RetreatRegistration;
 import com.norcalretreat.backend.repository.RegistrationRepository;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentCreateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,7 +63,61 @@ public class RegistrationService {
         }
 
         reg = registrationRepository.save(reg);
+        return convertToDTO(reg);
+    }
 
+    @Transactional
+    public PaymentResponse createPaymentIntent(Long registrationId) throws StripeException {
+        RetreatRegistration reg = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
+
+        if (!"pending".equals(reg.getPaymentStatus())) {
+            throw new IllegalArgumentException("Registration is not in pending status");
+        }
+
+        long amountInCents = reg.getTotalAmount().multiply(BigDecimal.valueOf(100)).longValue();
+
+        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                .setAmount(amountInCents)
+                .setCurrency("usd")
+                .setDescription("NorCal Men's Retreat 2026 - " + reg.getFirstName() + " " + reg.getLastName())
+                .putMetadata("registration_id", registrationId.toString())
+                .putMetadata("registrant_email", reg.getEmail())
+                .setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.AUTOMATIC)
+                .build();
+
+        PaymentIntent paymentIntent = PaymentIntent.create(params);
+
+        reg.setStripePaymentId(paymentIntent.getId());
+        registrationRepository.save(reg);
+
+        return new PaymentResponse(paymentIntent.getClientSecret(), paymentIntent.getId());
+    }
+
+    @Transactional
+    public RegistrationDTO confirmPayment(Long registrationId) throws StripeException {
+        RetreatRegistration reg = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
+
+        // Idempotent: if already paid, return success
+        if ("paid".equals(reg.getPaymentStatus())) {
+            return convertToDTO(reg);
+        }
+
+        if (reg.getStripePaymentId() == null) {
+            throw new IllegalArgumentException("No payment intent found for this registration");
+        }
+
+        // Verify payment status with Stripe directly
+        PaymentIntent paymentIntent = PaymentIntent.retrieve(reg.getStripePaymentId());
+        if (!"succeeded".equals(paymentIntent.getStatus())) {
+            throw new IllegalArgumentException("Payment has not succeeded. Status: " + paymentIntent.getStatus());
+        }
+
+        reg.setPaymentStatus("paid");
+        reg = registrationRepository.save(reg);
+
+        // Send confirmation emails after successful payment
         if (emailService != null) {
             try {
                 emailService.sendRegistrationConfirmation(reg);
