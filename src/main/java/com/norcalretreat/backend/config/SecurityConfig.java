@@ -50,6 +50,10 @@ public class SecurityConfig {
                         // Stripe webhook (public callback)
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
 
+                        // Menu config (GET is public, PUT is admin-only)
+                        .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERUSER")
+
                         // Admin-only endpoints
                         .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERUSER")
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERUSER")

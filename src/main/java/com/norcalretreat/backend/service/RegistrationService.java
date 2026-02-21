@@ -25,7 +25,7 @@ public class RegistrationService {
 
     private final RegistrationRepository registrationRepository;
 
-    @Value("${retreat.cost-per-person:240.00}")
+    @Value("${retreat.cost-per-person:288.00}")
     private BigDecimal costPerPerson;
 
     private EmailService emailService;
