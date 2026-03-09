@@ -41,7 +41,8 @@ public class SecurityConfig {
                 .exceptionHandling(exception ->
                         exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        // Auth endpoints
+                        // Auth endpoints (register is admin-only)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register").hasAnyRole("ADMIN", "SUPERUSER")
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // Health check
