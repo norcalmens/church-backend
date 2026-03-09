@@ -72,7 +72,7 @@ public class RetreatRegistration {
     private BigDecimal totalAmount;
 
     // Metadata
-    @Column(name = "user_id")
+    @Column(name = "user_id", nullable = true)
     private Long userId;
 
     @Column(name = "registered_at")
