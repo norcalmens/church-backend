@@ -2,12 +2,15 @@ package com.norcalretreat.backend.config;
 
 import com.norcalretreat.backend.entity.Permission;
 import com.norcalretreat.backend.entity.Role;
+import com.norcalretreat.backend.entity.User;
 import com.norcalretreat.backend.repository.RoleRepository;
+import com.norcalretreat.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -23,6 +26,8 @@ import java.util.Set;
 public class DataSeeder {
 
     private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     private final PlatformTransactionManager transactionManager;
 
     @PersistenceContext
@@ -33,6 +38,7 @@ public class DataSeeder {
         return args -> {
             TransactionTemplate tx = new TransactionTemplate(transactionManager);
             tx.executeWithoutResult(status -> seedPermissionsAndRoles());
+            tx.executeWithoutResult(status -> seedDefaultAdmin());
         };
     }
 
@@ -73,14 +79,47 @@ public class DataSeeder {
         memberRole.setPermissions(memberPermissions);
         roleRepository.save(memberRole);
 
+        // Create SUPERADMIN role
+        Role superadminRole = new Role();
+        superadminRole.setName("SUPERADMIN");
+        superadminRole.setDescription("Super administrator with unrestricted access");
+        superadminRole.setPermissions(new HashSet<>(adminPermissions));
+        roleRepository.save(superadminRole);
+
         // Create SUPERUSER role
         Role superuserRole = new Role();
         superuserRole.setName("SUPERUSER");
-        superuserRole.setDescription("Super administrator with unrestricted access");
-        superuserRole.setPermissions(new HashSet<>(adminPermissions));
+        superuserRole.setDescription("Elevated user with extended privileges");
+        Set<Permission> superuserPermissions = new HashSet<>();
+        superuserPermissions.add(viewRegistrations);
+        superuserPermissions.add(viewPayments);
+        superuserPermissions.add(viewStats);
+        superuserRole.setPermissions(superuserPermissions);
         roleRepository.save(superuserRole);
 
-        log.info("Seeded roles: ADMIN, MEMBER, SUPERUSER with {} permissions", adminPermissions.size());
+        log.info("Seeded roles: ADMIN, MEMBER, SUPERADMIN, SUPERUSER with {} permissions", adminPermissions.size());
+
+    }
+
+    private void seedDefaultAdmin() {
+        if (userRepository.existsByUsername("admin")) {
+            log.info("Default admin user already exists, skipping");
+            return;
+        }
+
+        Role adminRole = roleRepository.findByName("ADMIN")
+                .orElseThrow(() -> new RuntimeException("ADMIN role not found — roles must be seeded first"));
+
+        User admin = new User();
+        admin.setUsername("admin");
+        admin.setEmail("admin@norcalmensretreat.com");
+        admin.setPassword(passwordEncoder.encode("admin123"));
+        admin.setFirstName("Admin");
+        admin.setLastName("User");
+        admin.setIsActive(true);
+        admin.getRoles().add(adminRole);
+        userRepository.save(admin);
+        log.info("Seeded default admin user (username: admin, password: admin123)");
     }
 
     private Permission createPermission(String name, String description, String category) {

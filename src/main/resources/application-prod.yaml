@@ -1,0 +1,33 @@
+spring:
+ application:
+   name: church-backend
+ datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+
+ jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+ logging:
+  level:
+    com.norcalretreat: INFO
+    org.hibernate: WARN
+
+# Stripe Configuration
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+
+app:
+  frontend-url: ${APP_FRONTEND_URL}

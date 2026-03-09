@@ -26,7 +26,7 @@ public class MenuConfigController {
     }
 
     @PutMapping("/hidden")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<List<String>> setHiddenKeys(@RequestBody List<String> keys) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         log.info("Admin '{}' updating hidden menu keys: {} items", username, keys.size());

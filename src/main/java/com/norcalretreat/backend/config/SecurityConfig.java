@@ -42,7 +42,7 @@ public class SecurityConfig {
                         exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         // Auth endpoints (register is admin-only)
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register").hasAnyRole("ADMIN", "SUPERUSER")
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // Health check
@@ -56,12 +56,12 @@ public class SecurityConfig {
 
                         // Menu config (GET is public, PUT is admin-only)
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERUSER")
+                        .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Admin-only endpoints
-                        .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERUSER")
-                        .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERUSER")
-                        .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERUSER")
+                        .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Public registration endpoints (anonymous registration flow)
                         .requestMatchers(HttpMethod.POST, "/api/registrations").permitAll()
