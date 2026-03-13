@@ -61,6 +61,7 @@ public class SecurityConfig {
                         // Admin-only endpoints
                         .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/registrations/admin/*").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Public registration endpoints (anonymous registration flow)

@@ -105,6 +105,16 @@ public class RegistrationController {
         return ResponseEntity.ok(ApiResponse.success(registrations));
     }
 
+    @DeleteMapping("/admin/{id}")
+    public ResponseEntity<ApiResponse<Void>> adminDeleteRegistration(@PathVariable Long id) {
+        try {
+            registrationService.adminDeleteRegistration(id);
+            return ResponseEntity.ok(ApiResponse.success("Registration deleted", null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStats() {
         Map<String, Object> stats = registrationService.getStats();

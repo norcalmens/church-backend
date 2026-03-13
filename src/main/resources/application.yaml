@@ -37,6 +37,6 @@ mail:
 
 retreat:
   year: 2026
-  cost-per-person: 288.00
+  cost-per-person: 248.00
   max-attendees: 200
   contact-email: ${RETREAT_CONTACT_EMAIL:info@norcalmensretreat.com}

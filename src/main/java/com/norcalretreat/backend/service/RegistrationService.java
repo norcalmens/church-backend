@@ -29,7 +29,7 @@ public class RegistrationService {
 
     private final RegistrationRepository registrationRepository;
 
-    @Value("${retreat.cost-per-person:288.00}")
+    @Value("${retreat.cost-per-person:248.00}")
     private BigDecimal costPerPerson;
 
     private EmailService emailService;
@@ -147,7 +147,7 @@ public class RegistrationService {
         RetreatRegistration reg = registrationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
 
-        if (!reg.getUserId().equals(userId)) {
+        if (reg.getUserId() == null || !reg.getUserId().equals(userId)) {
             throw new IllegalArgumentException("Not authorized to update this registration");
         }
 
@@ -179,7 +179,7 @@ public class RegistrationService {
         RetreatRegistration reg = registrationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
 
-        if (!reg.getUserId().equals(userId)) {
+        if (reg.getUserId() == null || !reg.getUserId().equals(userId)) {
             throw new IllegalArgumentException("Not authorized to delete this registration");
         }
 
@@ -187,6 +187,13 @@ public class RegistrationService {
     }
 
     // Admin methods
+
+    @Transactional
+    public void adminDeleteRegistration(Long id) {
+        RetreatRegistration reg = registrationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
+        registrationRepository.delete(reg);
+    }
 
     public List<RegistrationDTO> getAllRegistrations() {
         return registrationRepository.findAll().stream()
