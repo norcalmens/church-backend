@@ -1,5 +1,6 @@
 package com.norcalretreat.backend.service;
 
+import com.norcalretreat.backend.entity.Attendee;
 import com.norcalretreat.backend.entity.RetreatRegistration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +9,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -132,6 +140,7 @@ public class EmailService {
         body.append("  Attendees: ").append(reg.getAttendees().size()).append("\n");
         body.append("  Total Amount: $").append(reg.getTotalAmount()).append("\n");
         body.append("  Payment Status: ").append(reg.getPaymentStatus()).append("\n\n");
+        appendAttendeeBreakdown(body, reg);
         body.append("Event Details:\n");
         body.append("  Dates: June 11-13, 2026\n");
         body.append("  Venue: Alliance Redwoods, 5000 Bohemian Highway, Occidental, CA 95465\n\n");
@@ -161,6 +170,7 @@ public class EmailService {
         body.append("  Amount: $").append(reg.getTotalAmount()).append("\n");
         body.append("  Payment ID: ").append(paymentId).append("\n");
         body.append("  Status: Paid\n\n");
+        appendAttendeeBreakdown(body, reg);
         body.append("We look forward to seeing you June 11-13, 2026!\n\n");
         body.append("— NorCal Men's Retreat 2026");
 
@@ -188,7 +198,8 @@ public class EmailService {
         body.append("Email: ").append(reg.getEmail()).append("\n");
         body.append("Attendees: ").append(reg.getAttendees().size()).append("\n");
         body.append("Total: $").append(reg.getTotalAmount()).append("\n");
-        body.append("Payment Status: ").append(reg.getPaymentStatus()).append("\n");
+        body.append("Payment Status: ").append(reg.getPaymentStatus()).append("\n\n");
+        appendAttendeeBreakdown(body, reg);
 
         message.setText(body.toString());
 
@@ -198,5 +209,62 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Failed to send admin notification", e);
         }
+    }
+
+    // ----- Attendee breakdown formatting -----
+
+    private static final Map<String, String> DAY_LABELS = Map.of(
+            "thu", "Thu Jun 11",
+            "fri", "Fri Jun 12",
+            "sat", "Sat Jun 13"
+    );
+
+    private void appendAttendeeBreakdown(StringBuilder body, RetreatRegistration reg) {
+        if (reg.getAttendees() == null || reg.getAttendees().isEmpty()) return;
+        body.append("Attendee Breakdown:\n");
+        for (Attendee a : reg.getAttendees()) {
+            body.append("  - ").append(a.getFirstName()).append(' ').append(a.getLastName()).append('\n');
+            for (String line : breakdownLines(a)) {
+                body.append("      ").append(line).append('\n');
+            }
+            if (a.getAmountPaid() != null) {
+                body.append("      Subtotal: $").append(a.getAmountPaid()).append('\n');
+            }
+        }
+        body.append('\n');
+    }
+
+    private List<String> breakdownLines(Attendee a) {
+        List<String> lines = new ArrayList<>();
+        if ("partial".equalsIgnoreCase(a.getAttendanceType())) {
+            String dayList = parseDays(a.getDays()).stream()
+                    .map(d -> DAY_LABELS.getOrDefault(d, d))
+                    .collect(Collectors.joining(", "));
+            lines.add("Single day (" + dayList + ")");
+            if ("half".equalsIgnoreCase(a.getMealOption())) {
+                lines.add("Single-day meals: half day, 2 meals — $50");
+            } else if ("full".equalsIgnoreCase(a.getMealOption())) {
+                lines.add("Single-day meals: full day, 3 meals — $65");
+            }
+        } else {
+            lines.add("Full retreat (3 days, lodging incl.) — $248");
+            if ("package".equalsIgnoreCase(a.getLinenOption())) {
+                lines.add("Linen & towel package — $25");
+            } else if ("individual".equalsIgnoreCase(a.getLinenOption())) {
+                int count = a.getLinenItemCount() != null ? a.getLinenItemCount() : 0;
+                BigDecimal cost = BigDecimal.valueOf(5L * count);
+                lines.add("Linens: " + count + " item" + (count == 1 ? "" : "s") + " @ $5 — $" + cost);
+            }
+        }
+        return lines;
+    }
+
+    private List<String> parseDays(String days) {
+        if (days == null || days.isBlank()) return List.of();
+        return Arrays.stream(days.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toLowerCase)
+                .collect(Collectors.toList());
     }
 }

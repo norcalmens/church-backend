@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "attendees")
 @Data
@@ -23,6 +25,29 @@ public class Attendee {
 
     @Column(name = "dietary_restrictions")
     private String dietaryRestrictions;
+
+    /** "full" or "partial". Defaults to "full" for legacy rows. */
+    @Column(name = "attendance_type", length = 16)
+    private String attendanceType = "full";
+
+    /** Comma-separated retreat days, e.g. "thu,fri" — only meaningful when attendanceType = "partial". */
+    @Column(name = "days", length = 32)
+    private String days;
+
+    /** "none" | "package" | "individual" — only applies to full-retreat (overnight) attendees. */
+    @Column(name = "linen_option", length = 16)
+    private String linenOption = "none";
+
+    @Column(name = "linen_item_count")
+    private Integer linenItemCount;
+
+    /** "none" | "half" | "full" — only applies to single-day (partial) attendees. */
+    @Column(name = "meal_option", length = 16)
+    private String mealOption = "none";
+
+    /** Server-computed price for this attendee. */
+    @Column(name = "amount_paid", precision = 10, scale = 2)
+    private BigDecimal amountPaid;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
