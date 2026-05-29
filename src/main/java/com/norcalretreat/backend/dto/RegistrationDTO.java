@@ -16,6 +16,7 @@ public class RegistrationDTO {
     private String city;
     private String state;
     private String zipCode;
+    private String congregation;
     private String roomPreference;
     private String emergencyName;
     private String emergencyRelationship;

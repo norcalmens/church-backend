@@ -252,6 +252,7 @@ public class RegistrationService {
         reg.setCity(dto.getCity());
         reg.setState(dto.getState());
         reg.setZipCode(dto.getZipCode());
+        reg.setCongregation(dto.getCongregation());
         reg.setRoomPreference(dto.getRoomPreference());
         reg.setEmergencyName(dto.getEmergencyName());
         reg.setEmergencyRelationship(dto.getEmergencyRelationship());
@@ -363,6 +364,7 @@ public class RegistrationService {
         dto.setCity(reg.getCity());
         dto.setState(reg.getState());
         dto.setZipCode(reg.getZipCode());
+        dto.setCongregation(reg.getCongregation());
         dto.setRoomPreference(reg.getRoomPreference());
         dto.setEmergencyName(reg.getEmergencyName());
         dto.setEmergencyRelationship(reg.getEmergencyRelationship());

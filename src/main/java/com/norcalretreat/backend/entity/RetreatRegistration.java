@@ -40,6 +40,9 @@ public class RetreatRegistration {
     @Column(name = "zip_code", length = 10)
     private String zipCode;
 
+    @Column(length = 200)
+    private String congregation;
+
     // Accommodation
     @Column(name = "room_preference", length = 20)
     private String roomPreference;
