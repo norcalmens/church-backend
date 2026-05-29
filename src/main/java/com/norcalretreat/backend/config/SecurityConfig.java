@@ -61,6 +61,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
+                        // Zoom links (public GET active list, admin-only mutations)
+                        .requestMatchers(HttpMethod.GET, "/api/zoom-links").permitAll()
+                        .requestMatchers("/api/zoom-links/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
                         // Admin-only endpoints
                         .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN")
