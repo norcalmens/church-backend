@@ -54,6 +54,9 @@ public class SecurityConfig {
                         // Stripe config (needed by frontend before login)
                         .requestMatchers(HttpMethod.GET, "/api/payments/config").permitAll()
 
+                        // Public donation endpoint (anonymous giving)
+                        .requestMatchers(HttpMethod.POST, "/api/payments/create-payment-intent").permitAll()
+
                         // Menu config (GET is public, PUT is admin-only)
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERADMIN")
