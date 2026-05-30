@@ -62,6 +62,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/donations/*/confirm").permitAll()
                         .requestMatchers("/api/donations/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
+                        // Payment plans: tokenized public portal endpoints, admin-only everything else
+                        .requestMatchers(HttpMethod.GET,  "/api/payment-plans/by-token/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/pay").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/payments/*/confirm").permitAll()
+                        .requestMatchers("/api/payment-plans/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
                         // Menu config (GET is public, PUT is admin-only)
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERADMIN")
