@@ -45,6 +45,9 @@ public class PaymentPlanService {
     @Value("${app.frontend-url:http://localhost:4200}")
     private String frontendUrl;
 
+    @Value("${stripe.webhook-secret:}")
+    private String stripeWebhookSecret;
+
     // ===== Admin: plans =====
 
     public List<PaymentPlanDTO> listAll() {
@@ -206,6 +209,12 @@ public class PaymentPlanService {
      */
     @Transactional
     public String createSubscriptionCheckout(String token, BigDecimal amount) throws StripeException {
+        // Safety guard: recurring requires the Stripe webhook to record each cycle's charge.
+        // Without it Stripe would still charge the card monthly but we'd never see the payments.
+        if (stripeWebhookSecret == null || stripeWebhookSecret.isBlank()) {
+            log.warn("Refused subscription checkout — stripe.webhook-secret is not configured");
+            throw new IllegalStateException("Monthly auto-pay isn't available yet. Please make a one-time payment instead.");
+        }
         validateAmount(amount);
         PaymentPlan plan = plans.findByPayerToken(token).orElseThrow(() -> new IllegalArgumentException("Payment plan not found"));
         if (!"active".equalsIgnoreCase(plan.getStatus())) {
