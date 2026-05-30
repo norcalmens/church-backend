@@ -23,11 +23,13 @@ spring:
     com.norcalretreat: INFO
     org.hibernate: WARN
 
-# Stripe Configuration
+# Stripe Configuration — empty defaults so a missing env var (e.g. the optional
+# STRIPE_WEBHOOK_SECRET) does not crash app startup; calls that need the key
+# will fail with a clean runtime error instead of taking the whole backend down.
 stripe:
-  secret-key: ${STRIPE_SECRET_KEY}
-  publishable-key: ${STRIPE_PUBLISHABLE_KEY}
-  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  secret-key: ${STRIPE_SECRET_KEY:}
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
 
 app:
-  frontend-url: ${APP_FRONTEND_URL}
+  frontend-url: ${APP_FRONTEND_URL:https://norcalmensretreat.com}
