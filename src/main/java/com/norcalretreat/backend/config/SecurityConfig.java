@@ -66,6 +66,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,  "/api/payment-plans/by-token/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/pay").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/payments/*/confirm").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/recurring/checkout").permitAll()
                         .requestMatchers("/api/payment-plans/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Menu config (GET is public, PUT is admin-only)

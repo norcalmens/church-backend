@@ -16,6 +16,14 @@ public class PaymentPlanDTO {
     private String payerToken;
     private String status;
     private String notes;
+
+    // Recurring (Stripe Subscription)
+    private String stripeCustomerId;
+    private String stripeSubscriptionId;
+    private BigDecimal recurringAmount;
+    private String recurringStatus;
+    private LocalDateTime recurringStartedAt;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

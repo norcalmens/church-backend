@@ -8,8 +8,14 @@ import com.norcalretreat.backend.entity.PaymentPlanPayment;
 import com.norcalretreat.backend.repository.PaymentPlanPaymentRepository;
 import com.norcalretreat.backend.repository.PaymentPlanRepository;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Invoice;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Subscription;
+import com.stripe.model.checkout.Session;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.SubscriptionCancelParams;
+import com.stripe.param.checkout.SessionCreateParams;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +41,9 @@ public class PaymentPlanService {
     public void setEmailService(EmailService emailService) {
         this.emailService = emailService;
     }
+
+    @Value("${app.frontend-url:http://localhost:4200}")
+    private String frontendUrl;
 
     // ===== Admin: plans =====
 
@@ -187,6 +196,167 @@ public class PaymentPlanService {
         return new PaymentPlanPayResponse(payment.getId(), intent.getClientSecret());
     }
 
+    // ===== Public: recurring (Stripe Subscriptions via Checkout) =====
+
+    /**
+     * Create a Stripe Checkout Session in subscription mode for this plan.
+     * Returns the URL to redirect the payer to. Stripe collects/saves the card,
+     * creates the Customer + Subscription, and then redirects back to the portal.
+     * Webhook events finish the wiring (storing IDs on the plan, recording each payment).
+     */
+    @Transactional
+    public String createSubscriptionCheckout(String token, BigDecimal amount) throws StripeException {
+        validateAmount(amount);
+        PaymentPlan plan = plans.findByPayerToken(token).orElseThrow(() -> new IllegalArgumentException("Payment plan not found"));
+        if (!"active".equalsIgnoreCase(plan.getStatus())) {
+            throw new IllegalStateException("This payment plan is not accepting payments.");
+        }
+        if (plan.getStripeSubscriptionId() != null && "active".equalsIgnoreCase(plan.getRecurringStatus())) {
+            throw new IllegalStateException("A monthly schedule is already active for this plan. Cancel it first to set up a new one.");
+        }
+        long amountInCents = amount.multiply(BigDecimal.valueOf(100)).longValueExact();
+
+        SessionCreateParams params = SessionCreateParams.builder()
+                .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
+                .setSuccessUrl(frontendUrl + "/plan/" + token + "?recurring=success")
+                .setCancelUrl(frontendUrl + "/plan/" + token + "?recurring=canceled")
+                .setCustomerEmail(plan.getPayerEmail())
+                .addLineItem(SessionCreateParams.LineItem.builder()
+                        .setQuantity(1L)
+                        .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
+                                .setCurrency("usd")
+                                .setUnitAmount(amountInCents)
+                                .setRecurring(SessionCreateParams.LineItem.PriceData.Recurring.builder()
+                                        .setInterval(SessionCreateParams.LineItem.PriceData.Recurring.Interval.MONTH)
+                                        .build())
+                                .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                        .setName("Payment Plan: " + plan.getPlanName())
+                                        .build())
+                                .build())
+                        .build())
+                .putMetadata("type", "payment_plan_subscription")
+                .putMetadata("plan_id", String.valueOf(plan.getId()))
+                .putMetadata("payer_token", plan.getPayerToken())
+                .build();
+
+        Session session = Session.create(params);
+        log.info("Created subscription Checkout Session {} for plan {} (${}/mo)", session.getId(), plan.getId(), amount);
+        return session.getUrl();
+    }
+
+    /** Admin: cancel the recurring subscription on a plan. */
+    @Transactional
+    public PaymentPlanDTO cancelRecurring(Long planId) throws StripeException {
+        PaymentPlan plan = plans.findById(planId).orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + planId));
+        if (plan.getStripeSubscriptionId() == null) {
+            throw new IllegalStateException("This plan has no recurring subscription.");
+        }
+        Subscription sub = Subscription.retrieve(plan.getStripeSubscriptionId());
+        sub.cancel(SubscriptionCancelParams.builder().build());
+        plan.setRecurringStatus("canceled");
+        plans.save(plan);
+        log.info("Canceled subscription {} on plan {}", plan.getStripeSubscriptionId(), plan.getId());
+        return toDto(plan, payments.findByPlanIdOrderByPaidAtDesc(plan.getId()));
+    }
+
+    // ===== Webhook event handlers =====
+
+    /** Called by webhook on checkout.session.completed for subscription mode. */
+    @Transactional
+    public void handleSubscriptionCheckoutCompleted(Session session) {
+        Map<String, String> md = session.getMetadata();
+        if (md == null || !"payment_plan_subscription".equals(md.get("type"))) return;
+        String planIdStr = md.get("plan_id");
+        if (planIdStr == null) return;
+        Long planId = Long.parseLong(planIdStr);
+        PaymentPlan plan = plans.findById(planId).orElse(null);
+        if (plan == null) { log.warn("Subscription checkout for missing plan {}", planId); return; }
+
+        plan.setStripeCustomerId(session.getCustomer());
+        plan.setStripeSubscriptionId(session.getSubscription());
+        plan.setRecurringStatus("active");
+        plan.setRecurringStartedAt(java.time.LocalDateTime.now());
+        // Fetch the subscription to get the actual amount on the price
+        try {
+            Subscription sub = Subscription.retrieve(session.getSubscription());
+            if (sub.getItems() != null && sub.getItems().getData() != null && !sub.getItems().getData().isEmpty()) {
+                var price = sub.getItems().getData().get(0).getPrice();
+                if (price != null && price.getUnitAmount() != null) {
+                    plan.setRecurringAmount(BigDecimal.valueOf(price.getUnitAmount()).divide(BigDecimal.valueOf(100)));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not load subscription detail for {}: {}", session.getSubscription(), e.getMessage());
+        }
+        plans.save(plan);
+        log.info("Activated recurring subscription {} on plan {} (${}/mo)", plan.getStripeSubscriptionId(), plan.getId(), plan.getRecurringAmount());
+    }
+
+    /** Called by webhook on invoice.payment_succeeded. Records the recurring charge as a paid Payment. */
+    @Transactional
+    public void handleInvoicePaid(Invoice invoice) {
+        String subId = invoice.getSubscription();
+        if (subId == null) return; // not a subscription invoice
+        PaymentPlan plan = plans.findAll().stream()
+                .filter(p -> subId.equals(p.getStripeSubscriptionId()))
+                .findFirst().orElse(null);
+        if (plan == null) { log.warn("Invoice {} for unknown subscription {}", invoice.getId(), subId); return; }
+
+        // Idempotency: skip if we already have a payment for this invoice charge
+        String chargeId = invoice.getCharge();
+        String paymentIntentId = invoice.getPaymentIntent();
+        String ref = chargeId != null ? chargeId : paymentIntentId;
+        if (ref != null) {
+            boolean exists = payments.findByPlanIdOrderByPaidAtDesc(plan.getId()).stream()
+                    .anyMatch(p -> ref.equals(p.getStripePaymentId()));
+            if (exists) { log.info("Invoice {} already recorded for plan {}", invoice.getId(), plan.getId()); return; }
+        }
+
+        BigDecimal amount = invoice.getAmountPaid() != null
+                ? BigDecimal.valueOf(invoice.getAmountPaid()).divide(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        PaymentPlanPayment p = new PaymentPlanPayment();
+        p.setPlanId(plan.getId());
+        p.setAmount(amount);
+        p.setMethod("stripe");
+        p.setStatus("paid");
+        p.setStripePaymentId(ref);
+        p.setReference("Recurring invoice " + invoice.getNumber());
+        p.setPaidAt(java.time.LocalDateTime.now());
+        payments.save(p);
+        log.info("Recorded recurring payment ${} on plan {} (invoice {})", amount, plan.getId(), invoice.getId());
+
+        // Auto-cancel subscription when the plan is fully paid
+        maybeMarkCompleted(plan);
+        if ("completed".equalsIgnoreCase(plan.getStatus()) && plan.getStripeSubscriptionId() != null
+                && "active".equalsIgnoreCase(plan.getRecurringStatus())) {
+            try {
+                Subscription sub = Subscription.retrieve(plan.getStripeSubscriptionId());
+                sub.cancel(SubscriptionCancelParams.builder().build());
+                plan.setRecurringStatus("canceled");
+                plans.save(plan);
+                log.info("Plan {} fully paid — canceled subscription {}", plan.getId(), plan.getStripeSubscriptionId());
+            } catch (Exception e) {
+                log.warn("Could not auto-cancel subscription on completed plan {}: {}", plan.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /** Called by webhook on customer.subscription.updated / deleted. Keeps our recurring_status in sync. */
+    @Transactional
+    public void handleSubscriptionStatusChanged(Subscription sub) {
+        if (sub == null || sub.getId() == null) return;
+        PaymentPlan plan = plans.findAll().stream()
+                .filter(p -> sub.getId().equals(p.getStripeSubscriptionId()))
+                .findFirst().orElse(null);
+        if (plan == null) return;
+        plan.setRecurringStatus(sub.getStatus()); // active | past_due | canceled | unpaid | trialing
+        plans.save(plan);
+        log.info("Synced subscription {} status -> {} on plan {}", sub.getId(), sub.getStatus(), plan.getId());
+    }
+
     @Transactional
     public PaymentPlanPaymentDTO confirmStripePayment(String token, Long paymentId) throws StripeException {
         PaymentPlan plan = plans.findByPayerToken(token).orElseThrow(() -> new IllegalArgumentException("Payment plan not found"));
@@ -268,6 +438,11 @@ public class PaymentPlanService {
         dto.setPayerToken(p.getPayerToken());
         dto.setStatus(p.getStatus());
         dto.setNotes(p.getNotes());
+        dto.setStripeCustomerId(p.getStripeCustomerId());
+        dto.setStripeSubscriptionId(p.getStripeSubscriptionId());
+        dto.setRecurringAmount(p.getRecurringAmount());
+        dto.setRecurringStatus(p.getRecurringStatus());
+        dto.setRecurringStartedAt(p.getRecurringStartedAt());
         dto.setCreatedAt(p.getCreatedAt());
         dto.setUpdatedAt(p.getUpdatedAt());
         BigDecimal paid = pays.stream()

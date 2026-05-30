@@ -41,6 +41,23 @@ public class PaymentPlan {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // ===== Recurring (Stripe Subscription) =====
+    @Column(name = "stripe_customer_id", length = 64)
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_subscription_id", length = 64)
+    private String stripeSubscriptionId;
+
+    @Column(name = "recurring_amount", precision = 10, scale = 2)
+    private BigDecimal recurringAmount;
+
+    /** active | past_due | canceled | unpaid | trialing | null */
+    @Column(name = "recurring_status", length = 20)
+    private String recurringStatus;
+
+    @Column(name = "recurring_started_at")
+    private LocalDateTime recurringStartedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

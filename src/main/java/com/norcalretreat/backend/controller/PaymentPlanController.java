@@ -111,6 +111,31 @@ public class PaymentPlanController {
         }
     }
 
+    @PostMapping("/by-token/{token}/recurring/checkout")
+    public ResponseEntity<?> startRecurringCheckout(@PathVariable String token, @RequestBody PayRequest req) {
+        try {
+            String url = service.createSubscriptionCheckout(token, req != null ? req.amount : null);
+            return ResponseEntity.ok(Map.of("url", url));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (StripeException e) {
+            log.error("Stripe error creating subscription checkout: {}", e.getMessage());
+            return ResponseEntity.status(502).body(Map.of("message", "Payment processor error: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/recurring/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<?> cancelRecurring(@PathVariable Long id) {
+        try { return ResponseEntity.ok(service.cancelRecurring(id)); }
+        catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (StripeException e) {
+            log.error("Stripe error canceling subscription: {}", e.getMessage());
+            return ResponseEntity.status(502).body(Map.of("message", "Payment processor error: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/by-token/{token}/payments/{paymentId}/confirm")
     public ResponseEntity<?> confirmPay(@PathVariable String token, @PathVariable Long paymentId) {
         try { return ResponseEntity.ok(service.confirmStripePayment(token, paymentId)); }
