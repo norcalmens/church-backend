@@ -57,6 +57,11 @@ public class SecurityConfig {
                         // Public donation endpoint (anonymous giving)
                         .requestMatchers(HttpMethod.POST, "/api/payments/create-payment-intent").permitAll()
 
+                        // Donations: public create + confirm, admin-only list
+                        .requestMatchers(HttpMethod.POST, "/api/donations").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/donations/*/confirm").permitAll()
+                        .requestMatchers("/api/donations/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
                         // Menu config (GET is public, PUT is admin-only)
                         .requestMatchers(HttpMethod.GET, "/api/menu-config/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/menu-config/**").hasAnyRole("ADMIN", "SUPERADMIN")
