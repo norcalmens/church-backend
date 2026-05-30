@@ -1,6 +1,7 @@
 package com.norcalretreat.backend.service;
 
 import com.norcalretreat.backend.entity.Attendee;
+import com.norcalretreat.backend.entity.PaymentPlan;
 import com.norcalretreat.backend.entity.RetreatRegistration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -181,6 +182,43 @@ public class EmailService {
             log.info("Payment receipt sent to {}", reg.getEmail());
         } catch (Exception e) {
             log.error("Failed to send payment receipt to {}", reg.getEmail(), e);
+        }
+    }
+
+    public void sendPaymentPlanInvite(PaymentPlan plan) {
+        if (plan == null || plan.getPayerEmail() == null || plan.getPayerEmail().isBlank()) return;
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(plan.getPayerEmail());
+        message.setSubject("Your payment plan for " + plan.getRetreatLabel());
+
+        String payUrl = frontendUrl + "/plan/" + plan.getPayerToken();
+        String greeting = (plan.getPayerName() != null && !plan.getPayerName().isBlank())
+                ? "Hi " + plan.getPayerName().split(" ")[0] + ","
+                : "Hi,";
+
+        StringBuilder body = new StringBuilder();
+        body.append(greeting).append("\n\n");
+        body.append("A payment plan has been set up for you for the ").append(plan.getRetreatLabel()).append(".\n\n");
+        body.append("Plan: ").append(plan.getPlanName()).append("\n");
+        body.append("Total: $").append(plan.getTotalAmount()).append("\n\n");
+        body.append("You can pay any amount at your own pace using your secure payment link:\n");
+        body.append(payUrl).append("\n\n");
+        body.append("The link will always show your current balance and payment history. ");
+        body.append("Save it for future payments — there's no login required.\n\n");
+        if (plan.getNotes() != null && !plan.getNotes().isBlank()) {
+            body.append("A note from us:\n").append(plan.getNotes()).append("\n\n");
+        }
+        body.append("If you have any questions, just reply to this email.\n\n");
+        body.append("— NorCal Men's Retreat");
+
+        message.setText(body.toString());
+
+        try {
+            mailSender.send(message);
+            log.info("Payment plan invite sent to {} for plan {}", plan.getPayerEmail(), plan.getId());
+        } catch (Exception e) {
+            log.error("Failed to send payment plan invite to {}", plan.getPayerEmail(), e);
         }
     }
 

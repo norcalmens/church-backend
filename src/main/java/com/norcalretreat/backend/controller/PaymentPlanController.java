@@ -59,6 +59,14 @@ public class PaymentPlanController {
         catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
     }
 
+    @PostMapping("/{id}/resend-invite")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<?> resendInvite(@PathVariable Long id) {
+        try { service.resendInvite(id); return ResponseEntity.noContent().build(); }
+        catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
+        catch (IllegalStateException e)   { return ResponseEntity.status(503).body(Map.of("message", e.getMessage())); }
+    }
+
     @PostMapping("/{id}/payments")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<?> recordPayment(@PathVariable Long id, @RequestBody PaymentPlanPaymentDTO req) {

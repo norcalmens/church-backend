@@ -12,6 +12,7 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,13 @@ public class PaymentPlanService {
 
     private final PaymentPlanRepository plans;
     private final PaymentPlanPaymentRepository payments;
+
+    private EmailService emailService;
+
+    @Autowired(required = false)
+    public void setEmailService(EmailService emailService) {
+        this.emailService = emailService;
+    }
 
     // ===== Admin: plans =====
 
@@ -47,7 +55,23 @@ public class PaymentPlanService {
         applyAdminFields(req, p);
         p = plans.save(p);
         log.info("Created PaymentPlan {} ({}) for {} <{}> — total ${}", p.getId(), p.getPlanName(), p.getPayerName(), p.getPayerEmail(), p.getTotalAmount());
+        // Email the payer their personal payment link. Non-fatal if mail is unavailable.
+        if (emailService != null) {
+            try { emailService.sendPaymentPlanInvite(p); }
+            catch (Exception e) { log.warn("Could not send payment plan invite for {}: {}", p.getId(), e.getMessage()); }
+        }
         return toDto(p, List.of());
+    }
+
+    /** Admin-triggered resend of the invite email (e.g., payer lost the link). */
+    public void resendInvite(Long planId) {
+        PaymentPlan p = plans.findById(planId)
+                .orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + planId));
+        if (emailService == null) {
+            throw new IllegalStateException("Email service is not configured in this environment.");
+        }
+        emailService.sendPaymentPlanInvite(p);
+        log.info("Resent payment plan invite for plan {} to {}", p.getId(), p.getPayerEmail());
     }
 
     @Transactional
