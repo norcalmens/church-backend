@@ -195,6 +195,15 @@ public class RegistrationService {
         registrationRepository.delete(reg);
     }
 
+    @Transactional
+    public RegistrationDTO setSpeakerFlag(Long id, boolean speaker) {
+        RetreatRegistration reg = registrationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
+        reg.setSpeaker(speaker);
+        reg = registrationRepository.save(reg);
+        return convertToDTO(reg);
+    }
+
     public List<RegistrationDTO> getAllRegistrations() {
         return registrationRepository.findAll().stream()
                 .map(this::convertToDTO)
@@ -259,6 +268,7 @@ public class RegistrationService {
         reg.setEmergencyPhone(dto.getEmergencyPhone());
         reg.setSpecialRequests(dto.getSpecialRequests());
         reg.setAgreedToTerms(dto.getAgreedToTerms());
+        if (dto.getSpeaker() != null) reg.setSpeaker(dto.getSpeaker());
     }
 
     private Attendee buildAttendee(AttendeeDTO aDto, RetreatRegistration reg) {
@@ -371,6 +381,7 @@ public class RegistrationService {
         dto.setEmergencyPhone(reg.getEmergencyPhone());
         dto.setSpecialRequests(reg.getSpecialRequests());
         dto.setAgreedToTerms(reg.getAgreedToTerms());
+        dto.setSpeaker(reg.getSpeaker() != null && reg.getSpeaker());
         dto.setPaymentStatus(reg.getPaymentStatus());
         dto.setTotalAmount(reg.getTotalAmount());
         dto.setStripePaymentId(reg.getStripePaymentId());

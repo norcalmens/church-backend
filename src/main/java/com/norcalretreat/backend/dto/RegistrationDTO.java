@@ -23,6 +23,7 @@ public class RegistrationDTO {
     private String emergencyPhone;
     private String specialRequests;
     private Boolean agreedToTerms;
+    private Boolean speaker;
     private String paymentStatus;
     private BigDecimal totalAmount;
     private String stripePaymentId;

@@ -64,6 +64,9 @@ public class RetreatRegistration {
     @Column(name = "agreed_to_terms")
     private Boolean agreedToTerms = false;
 
+    @Column(name = "speaker", nullable = false)
+    private Boolean speaker = false;
+
     // Payment
     @Column(name = "stripe_payment_id")
     private String stripePaymentId;
