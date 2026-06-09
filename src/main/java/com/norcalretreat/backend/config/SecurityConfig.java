@@ -81,9 +81,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/registrations/admin/*").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.PATCH,  "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Public registration endpoints (anonymous registration flow)
+                        .requestMatchers(HttpMethod.GET,  "/api/registrations/availability").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/payment-intent").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/confirm-payment").permitAll()

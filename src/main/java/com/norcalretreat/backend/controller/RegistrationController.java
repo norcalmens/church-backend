@@ -133,6 +133,11 @@ public class RegistrationController {
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
+    @GetMapping("/availability")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAvailability() {
+        return ResponseEntity.ok(ApiResponse.success(registrationService.getAvailability()));
+    }
+
     private Long getCurrentUserId() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userRepository.findByUsername(username)

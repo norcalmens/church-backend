@@ -50,6 +50,9 @@ public class RegistrationService {
     @Value("${retreat.meals-full-day-price:65.00}")
     private BigDecimal fullDayMealPrice;
 
+    @Value("${retreat.capacity:35}")
+    private int retreatCapacity;
+
     private static final Set<String> VALID_DAYS = new HashSet<>(Arrays.asList("thu", "fri", "sat"));
 
     private EmailService emailService;
@@ -61,6 +64,16 @@ public class RegistrationService {
 
     @Transactional
     public RegistrationDTO createRegistration(RegistrationDTO dto, Long userId) {
+        int incomingCount = dto.getAttendees() == null ? 0 : dto.getAttendees().size();
+        int currentAttendees = countCurrentAttendees();
+        if (currentAttendees + incomingCount > retreatCapacity) {
+            int remaining = Math.max(0, retreatCapacity - currentAttendees);
+            if (remaining == 0) {
+                throw new IllegalArgumentException("Registration is full -- all " + retreatCapacity + " spaces have been filled.");
+            }
+            throw new IllegalArgumentException("Only " + remaining + " space" + (remaining == 1 ? "" : "s") + " left -- please reduce the number of attendees.");
+        }
+
         RetreatRegistration reg = new RetreatRegistration();
         reg.setUserId(userId);
         mapDtoToEntity(dto, reg);
@@ -75,6 +88,23 @@ public class RegistrationService {
 
         reg = registrationRepository.save(reg);
         return convertToDTO(reg);
+    }
+
+    public Map<String, Object> getAvailability() {
+        int total = countCurrentAttendees();
+        int spacesLeft = Math.max(0, retreatCapacity - total);
+        Map<String, Object> out = new HashMap<>();
+        out.put("capacity", retreatCapacity);
+        out.put("totalAttendees", total);
+        out.put("spacesLeft", spacesLeft);
+        out.put("isFull", spacesLeft == 0);
+        return out;
+    }
+
+    private int countCurrentAttendees() {
+        return registrationRepository.findAll().stream()
+                .mapToInt(r -> r.getAttendees() == null ? 0 : r.getAttendees().size())
+                .sum();
     }
 
     @Transactional
