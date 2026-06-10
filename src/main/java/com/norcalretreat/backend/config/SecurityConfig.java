@@ -90,6 +90,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/payment-intent").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/confirm-payment").permitAll()
 
+                        // Waitlist — anyone can join, only admins can read/manage
+                        .requestMatchers(HttpMethod.POST,   "/api/waitlist").permitAll()
+                        .requestMatchers(HttpMethod.GET,    "/api/waitlist").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.PATCH,  "/api/waitlist/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/waitlist/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
+                        // System settings — public read of safe keys, admin writes
+                        .requestMatchers(HttpMethod.GET, "/api/settings/public/**").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/settings/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
                         // Remaining registration and payment endpoints require authentication
                         .requestMatchers("/api/registrations/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()

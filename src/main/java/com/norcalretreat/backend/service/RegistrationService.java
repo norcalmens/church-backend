@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class RegistrationService {
 
     private final RegistrationRepository registrationRepository;
+    private final SystemSettingService settingService;
 
     @Value("${retreat.cost-per-person:248.00}")
     private BigDecimal fullRetreatPrice;
@@ -51,7 +52,11 @@ public class RegistrationService {
     private BigDecimal fullDayMealPrice;
 
     @Value("${retreat.capacity:35}")
-    private int retreatCapacity;
+    private int defaultRetreatCapacity;
+
+    private int currentCapacity() {
+        return settingService.getInt(SystemSettingService.KEY_RETREAT_CAPACITY, defaultRetreatCapacity);
+    }
 
     private static final Set<String> VALID_DAYS = new HashSet<>(Arrays.asList("thu", "fri", "sat"));
 
@@ -64,12 +69,13 @@ public class RegistrationService {
 
     @Transactional
     public RegistrationDTO createRegistration(RegistrationDTO dto, Long userId) {
+        int capacity = currentCapacity();
         int incomingCount = dto.getAttendees() == null ? 0 : dto.getAttendees().size();
         int currentAttendees = countCurrentAttendees();
-        if (currentAttendees + incomingCount > retreatCapacity) {
-            int remaining = Math.max(0, retreatCapacity - currentAttendees);
+        if (currentAttendees + incomingCount > capacity) {
+            int remaining = Math.max(0, capacity - currentAttendees);
             if (remaining == 0) {
-                throw new IllegalArgumentException("Registration is full -- all " + retreatCapacity + " spaces have been filled.");
+                throw new IllegalArgumentException("Registration is full -- all " + capacity + " spaces have been filled.");
             }
             throw new IllegalArgumentException("Only " + remaining + " space" + (remaining == 1 ? "" : "s") + " left -- please reduce the number of attendees.");
         }
@@ -87,14 +93,25 @@ public class RegistrationService {
         reg.setTotalAmount(computeTotal(reg));
 
         reg = registrationRepository.save(reg);
-        return convertToDTO(reg);
+
+        // Position info for the success screen: where this group lands in the
+        // attendee roster (1-based ordinal of the LAST attendee they just added).
+        int newTotal = countCurrentAttendees();
+        int firstSlot = newTotal - incomingCount + 1;
+        RegistrationDTO out = convertToDTO(reg);
+        out.setPositionFirst(firstSlot);
+        out.setPositionLast(newTotal);
+        out.setTotalAttendees(newTotal);
+        out.setCapacity(capacity);
+        return out;
     }
 
     public Map<String, Object> getAvailability() {
+        int capacity = currentCapacity();
         int total = countCurrentAttendees();
-        int spacesLeft = Math.max(0, retreatCapacity - total);
+        int spacesLeft = Math.max(0, capacity - total);
         Map<String, Object> out = new HashMap<>();
-        out.put("capacity", retreatCapacity);
+        out.put("capacity", capacity);
         out.put("totalAttendees", total);
         out.put("spacesLeft", spacesLeft);
         out.put("isFull", spacesLeft == 0);

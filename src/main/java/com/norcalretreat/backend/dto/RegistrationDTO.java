@@ -31,4 +31,11 @@ public class RegistrationDTO {
     private LocalDateTime registeredAt;
     private List<AttendeeDTO> attendees;
     private int attendeeCount;
+
+    // Populated only on create() response so the success screen can
+    // show "You are #N of CAPACITY" without a follow-up round trip.
+    private Integer positionFirst;
+    private Integer positionLast;
+    private Integer totalAttendees;
+    private Integer capacity;
 }
