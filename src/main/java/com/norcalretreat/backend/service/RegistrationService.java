@@ -476,6 +476,39 @@ public class RegistrationService {
     }
 
     @Transactional
+    public RegistrationDTO adminUpdateRegistration(Long id, RegistrationDTO dto) {
+        RetreatRegistration reg = registrationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
+        // Only touch contact + congregation fields. Don't let an admin edit
+        // financial / payment / userId / attendees from this endpoint --
+        // those have their own dedicated paths.
+        if (dto.getFirstName() != null)    reg.setFirstName(dto.getFirstName().trim());
+        if (dto.getLastName() != null)     reg.setLastName(dto.getLastName().trim());
+        if (dto.getEmail() != null)        reg.setEmail(dto.getEmail().trim());
+        if (dto.getPhone() != null)        reg.setPhone(dto.getPhone().trim());
+        if (dto.getCongregation() != null) reg.setCongregation(dto.getCongregation().trim());
+        reg = registrationRepository.save(reg);
+        return convertToDTO(reg);
+    }
+
+    @Transactional
+    public AttendeeDTO adminUpdateAttendee(Long attendeeId, AttendeeDTO dto) {
+        for (RetreatRegistration reg : registrationRepository.findAll()) {
+            for (Attendee a : reg.getAttendees()) {
+                if (attendeeId.equals(a.getId())) {
+                    if (dto.getFirstName() != null)           a.setFirstName(dto.getFirstName().trim());
+                    if (dto.getLastName() != null)            a.setLastName(dto.getLastName().trim());
+                    if (dto.getAge() != null)                 a.setAge(dto.getAge());
+                    if (dto.getDietaryRestrictions() != null) a.setDietaryRestrictions(dto.getDietaryRestrictions().trim());
+                    registrationRepository.save(reg);
+                    return convertAttendeeToDTO(a);
+                }
+            }
+        }
+        throw new IllegalArgumentException("Attendee not found");
+    }
+
+    @Transactional
     public AttendeeDTO setAttendeeSpeakerFlag(Long attendeeId, boolean speaker) {
         // Walk registrations to find the attendee -- avoids needing a new
         // AttendeeRepository just for one mutation.

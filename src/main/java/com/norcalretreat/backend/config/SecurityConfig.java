@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/registrations/admin/*").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.GET,    "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.PATCH,  "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.PUT,    "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Public registration endpoints (anonymous registration flow)

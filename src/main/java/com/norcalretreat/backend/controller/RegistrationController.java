@@ -144,6 +144,30 @@ public class RegistrationController {
         }
     }
 
+    // Admin partial-edit: fix names, contact info, congregation
+    @PutMapping("/admin/{id}")
+    public ResponseEntity<ApiResponse<RegistrationDTO>> adminUpdateRegistration(
+            @PathVariable Long id, @RequestBody RegistrationDTO dto) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success("Registration updated",
+                    registrationService.adminUpdateRegistration(id, dto)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // Admin partial-edit: fix attendee's name, age, dietary
+    @PatchMapping("/admin/attendees/{attendeeId}")
+    public ResponseEntity<ApiResponse<com.norcalretreat.backend.dto.AttendeeDTO>> adminUpdateAttendee(
+            @PathVariable Long attendeeId, @RequestBody com.norcalretreat.backend.dto.AttendeeDTO dto) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success("Attendee updated",
+                    registrationService.adminUpdateAttendee(attendeeId, dto)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStats() {
         Map<String, Object> stats = registrationService.getStats();
