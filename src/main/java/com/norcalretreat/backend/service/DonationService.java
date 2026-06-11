@@ -130,6 +130,20 @@ public class DonationService {
     }
 
     /**
+     * Admin-only: delete a donation record. Used to clean up pending entries
+     * (abandoned card flows) or duplicate manual records. Does NOT touch Stripe --
+     * a paid Stripe charge stays on the books at Stripe even if removed here.
+     */
+    @Transactional
+    public void delete(Long id) {
+        if (!repository.existsById(id)) {
+            throw new IllegalArgumentException("Donation not found: " + id);
+        }
+        repository.deleteById(id);
+        log.info("Deleted donation {}", id);
+    }
+
+    /**
      * Record a donation that was already processed outside this app (e.g., a past Stripe charge,
      * a cash gift, or a check). Skips Stripe entirely.
      */

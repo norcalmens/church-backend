@@ -102,6 +102,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/settings/public/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/settings/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
+                        // Feedback -- anyone can submit, only admins can read/manage
+                        .requestMatchers(HttpMethod.POST,   "/api/feedback").permitAll()
+                        .requestMatchers(HttpMethod.GET,    "/api/feedback").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/feedback/**").hasAnyRole("ADMIN", "SUPERADMIN")
+
                         // Remaining registration and payment endpoints require authentication
                         .requestMatchers("/api/registrations/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
