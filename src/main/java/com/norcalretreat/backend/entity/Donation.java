@@ -29,6 +29,11 @@ public class Donation {
     @Column(columnDefinition = "TEXT")
     private String message;
 
+    /** Admin-only internal notes: "sent thank-you letter", "check
+     *  reconciled", "donor wants anonymity", etc. Never shown to the donor. */
+    @Column(name = "admin_notes", columnDefinition = "TEXT")
+    private String adminNotes;
+
     @Column(name = "stripe_payment_id")
     private String stripePaymentId;
 

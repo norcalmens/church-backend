@@ -120,6 +120,7 @@ public class DonationService {
             d.setCurrency(req.getCurrency().toLowerCase());
         }
         d.setMessage(req.getMessage());
+        d.setAdminNotes(req.getAdminNotes());
         d.setStripePaymentId(req.getStripePaymentId());
         if (req.getPaymentStatus() != null && !req.getPaymentStatus().isBlank()) {
             d.setPaymentStatus(req.getPaymentStatus());
@@ -164,6 +165,7 @@ public class DonationService {
         d.setAmount(req.getAmount());
         d.setCurrency(req.getCurrency() != null && !req.getCurrency().isBlank() ? req.getCurrency().toLowerCase() : "usd");
         d.setMessage(req.getMessage());
+        d.setAdminNotes(req.getAdminNotes());
         d.setStripePaymentId(req.getStripePaymentId());
         d.setPaymentStatus(req.getPaymentStatus() != null && !req.getPaymentStatus().isBlank() ? req.getPaymentStatus() : "paid");
         d = repository.save(d);
@@ -186,6 +188,7 @@ public class DonationService {
         dto.setAmount(d.getAmount());
         dto.setCurrency(d.getCurrency());
         dto.setMessage(d.getMessage());
+        dto.setAdminNotes(d.getAdminNotes());
         dto.setStripePaymentId(d.getStripePaymentId());
         dto.setPaymentStatus(d.getPaymentStatus());
         dto.setCreatedAt(d.getCreatedAt());

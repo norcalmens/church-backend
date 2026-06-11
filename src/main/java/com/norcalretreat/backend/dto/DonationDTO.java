@@ -12,6 +12,7 @@ public class DonationDTO {
     private BigDecimal amount;
     private String currency;
     private String message;
+    private String adminNotes;
     private String stripePaymentId;
     private String paymentStatus;
     private LocalDateTime createdAt;
