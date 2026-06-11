@@ -30,4 +30,14 @@ public class AttendeeDTO {
 
     /** Server-computed; ignored on input. */
     private BigDecimal amountPaid;
+
+    /** Admin-set: true if this individual is a retreat speaker. */
+    private Boolean speaker;
+
+    // Hoisted from parent registration so an attendee-flat admin view can
+    // show contact info and church without re-joining server-side.
+    private Long registrationId;
+    private String congregation;
+    private String primaryEmail;
+    private String primaryPhone;
 }

@@ -359,6 +359,7 @@ public class RegistrationService {
 
         attendee.setAmountPaid(computeAttendeeCost(attendee));
         attendee.setRegistration(reg);
+        attendee.setSpeaker(Boolean.TRUE.equals(aDto.getSpeaker()));
         return attendee;
     }
 
@@ -454,6 +455,39 @@ public class RegistrationService {
         dto.setLinenItemCount(attendee.getLinenItemCount());
         dto.setMealOption(attendee.getMealOption());
         dto.setAmountPaid(attendee.getAmountPaid());
+        dto.setSpeaker(attendee.getSpeaker() != null && attendee.getSpeaker());
+        RetreatRegistration parent = attendee.getRegistration();
+        if (parent != null) {
+            dto.setRegistrationId(parent.getId());
+            dto.setCongregation(parent.getCongregation());
+            dto.setPrimaryEmail(parent.getEmail());
+            dto.setPrimaryPhone(parent.getPhone());
+        }
         return dto;
+    }
+
+    // ----- Per-attendee speaker flag (admin) -----
+
+    public List<AttendeeDTO> getAllAttendees() {
+        return registrationRepository.findAll().stream()
+                .flatMap(r -> r.getAttendees().stream())
+                .map(this::convertAttendeeToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public AttendeeDTO setAttendeeSpeakerFlag(Long attendeeId, boolean speaker) {
+        // Walk registrations to find the attendee -- avoids needing a new
+        // AttendeeRepository just for one mutation.
+        for (RetreatRegistration reg : registrationRepository.findAll()) {
+            for (Attendee a : reg.getAttendees()) {
+                if (attendeeId.equals(a.getId())) {
+                    a.setSpeaker(speaker);
+                    registrationRepository.save(reg);
+                    return convertAttendeeToDTO(a);
+                }
+            }
+        }
+        throw new IllegalArgumentException("Attendee not found");
     }
 }

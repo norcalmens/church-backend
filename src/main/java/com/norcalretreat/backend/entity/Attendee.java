@@ -49,6 +49,11 @@ public class Attendee {
     @Column(name = "amount_paid", precision = 10, scale = 2)
     private BigDecimal amountPaid;
 
+    /** Admin-set flag so the actual speaker is marked, even when their
+     *  family was registered under someone else's contact info. */
+    @Column(name = "speaker", nullable = false)
+    private Boolean speaker = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
     @JsonIgnore

@@ -127,6 +127,23 @@ public class RegistrationController {
         }
     }
 
+    @GetMapping("/admin/attendees")
+    public ResponseEntity<ApiResponse<List<com.norcalretreat.backend.dto.AttendeeDTO>>> getAllAttendees() {
+        return ResponseEntity.ok(ApiResponse.success(registrationService.getAllAttendees()));
+    }
+
+    @PatchMapping("/admin/attendees/{attendeeId}/speaker")
+    public ResponseEntity<ApiResponse<com.norcalretreat.backend.dto.AttendeeDTO>> setAttendeeSpeakerFlag(
+            @PathVariable Long attendeeId, @RequestBody Map<String, Boolean> body) {
+        try {
+            boolean speaker = Boolean.TRUE.equals(body.get("speaker"));
+            return ResponseEntity.ok(ApiResponse.success("Speaker flag updated",
+                    registrationService.setAttendeeSpeakerFlag(attendeeId, speaker)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStats() {
         Map<String, Object> stats = registrationService.getStats();
