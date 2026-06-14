@@ -70,14 +70,23 @@ public class RegistrationService {
     @Transactional
     public RegistrationDTO createRegistration(RegistrationDTO dto, Long userId) {
         int capacity = currentCapacity();
-        int incomingCount = dto.getAttendees() == null ? 0 : dto.getAttendees().size();
-        int currentAttendees = countCurrentAttendees();
-        if (currentAttendees + incomingCount > capacity) {
-            int remaining = Math.max(0, capacity - currentAttendees);
+        // Only overnight (full-retreat) attendees consume the bed cap.
+        // Day attendees never take a slot, even when they come for all 3 days.
+        int incomingOvernight = dto.getAttendees() == null ? 0 : (int) dto.getAttendees().stream()
+                .filter(this::isOvernightAttendee)
+                .count();
+        int currentOvernight = countOvernightAttendees();
+        if (currentOvernight + incomingOvernight > capacity) {
+            int remaining = Math.max(0, capacity - currentOvernight);
             if (remaining == 0) {
-                throw new IllegalArgumentException("Registration is full -- all " + capacity + " spaces have been filled.");
+                throw new IllegalArgumentException(
+                        "Lodging is full -- all " + capacity + " overnight spaces have been filled. " +
+                        "Day attendees can still register, but no overnight stays remain.");
             }
-            throw new IllegalArgumentException("Only " + remaining + " space" + (remaining == 1 ? "" : "s") + " left -- please reduce the number of attendees.");
+            throw new IllegalArgumentException(
+                    "Only " + remaining + " overnight space" + (remaining == 1 ? "" : "s") +
+                    " left. Reduce the number of overnight attendees " +
+                    "(single-day attendees don't take an overnight slot).");
         }
 
         RetreatRegistration reg = new RetreatRegistration();
@@ -94,30 +103,49 @@ public class RegistrationService {
 
         reg = registrationRepository.save(reg);
 
-        // Position info for the success screen: where this group lands in the
-        // attendee roster (1-based ordinal of the LAST attendee they just added).
-        int newTotal = countCurrentAttendees();
-        int firstSlot = newTotal - incomingCount + 1;
+        // Position info for the success screen tracks ONLY overnight attendees
+        // (matches the bed cap). For day-only registrations we skip position
+        // info entirely since they don't claim a numbered slot.
         RegistrationDTO out = convertToDTO(reg);
-        out.setPositionFirst(firstSlot);
-        out.setPositionLast(newTotal);
-        out.setTotalAttendees(newTotal);
-        out.setCapacity(capacity);
+        if (incomingOvernight > 0) {
+            int newOvernightTotal = countOvernightAttendees();
+            int firstSlot = newOvernightTotal - incomingOvernight + 1;
+            out.setPositionFirst(firstSlot);
+            out.setPositionLast(newOvernightTotal);
+            out.setTotalAttendees(newOvernightTotal);
+            out.setCapacity(capacity);
+        }
         return out;
     }
 
     public Map<String, Object> getAvailability() {
         int capacity = currentCapacity();
-        int total = countCurrentAttendees();
-        int spacesLeft = Math.max(0, capacity - total);
+        int overnight = countOvernightAttendees();
+        int spacesLeft = Math.max(0, capacity - overnight);
         Map<String, Object> out = new HashMap<>();
         out.put("capacity", capacity);
-        out.put("totalAttendees", total);
+        // Kept under the existing field name so the frontend stays
+        // wire-compatible; the value is now "overnight attendees" specifically.
+        out.put("totalAttendees", overnight);
+        out.put("overnightAttendees", overnight);
         out.put("spacesLeft", spacesLeft);
         out.put("isFull", spacesLeft == 0);
         return out;
     }
 
+    private boolean isOvernightAttendee(AttendeeDTO a) {
+        return !"partial".equalsIgnoreCase(a.getAttendanceType());
+    }
+
+    private int countOvernightAttendees() {
+        return registrationRepository.findAll().stream()
+                .mapToInt(r -> r.getAttendees() == null ? 0 : (int) r.getAttendees().stream()
+                        .filter(a -> !"partial".equalsIgnoreCase(a.getAttendanceType()))
+                        .count())
+                .sum();
+    }
+
+    @SuppressWarnings("unused")
     private int countCurrentAttendees() {
         return registrationRepository.findAll().stream()
                 .mapToInt(r -> r.getAttendees() == null ? 0 : r.getAttendees().size())
