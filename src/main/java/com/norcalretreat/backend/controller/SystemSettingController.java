@@ -114,4 +114,36 @@ public class SystemSettingController {
                 .map(v -> "true".equalsIgnoreCase(v.trim()))
                 .orElse(defaultValue);
     }
+
+    // === Theme ============================================================
+    // Allowlist matches the IDs defined in src/styles.scss. Anything not in
+    // this set is rejected, so a typo or hand-crafted PUT can't break the
+    // running UI (the frontend would just not match a .theme-<id> class).
+    private static final java.util.Set<String> VALID_THEMES = java.util.Set.of(
+            "sunrise", "forest", "pacific", "vintage", "slate", "sage");
+    private static final String DEFAULT_THEME = "sunrise";
+
+    @GetMapping("/public/theme")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTheme() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("theme", settingService.get(SystemSettingService.KEY_THEME).orElse(DEFAULT_THEME));
+        return ResponseEntity.ok(ApiResponse.success(body));
+    }
+
+    @PutMapping("/theme")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setTheme(@RequestBody Map<String, Object> body) {
+        Object raw = body.get("theme");
+        if (raw == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("theme is required"));
+        }
+        String id = raw.toString().trim().toLowerCase();
+        if (!VALID_THEMES.contains(id)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    "Unknown theme '" + id + "'. Valid options: " + VALID_THEMES));
+        }
+        settingService.set(SystemSettingService.KEY_THEME, id);
+        Map<String, Object> out = new HashMap<>();
+        out.put("theme", id);
+        return ResponseEntity.ok(ApiResponse.success("Theme updated", out));
+    }
 }

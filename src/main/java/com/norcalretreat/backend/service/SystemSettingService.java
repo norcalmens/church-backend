@@ -20,6 +20,7 @@ public class SystemSettingService {
     public static final String KEY_SOCIAL_SHOW_FACEBOOK  = "social.facebook.show";
     public static final String KEY_SOCIAL_SHOW_INSTAGRAM = "social.instagram.show";
     public static final String KEY_SOCIAL_SHOW_YOUTUBE   = "social.youtube.show";
+    public static final String KEY_THEME                 = "theme.name";
 
     private final SystemSettingRepository repo;
 
