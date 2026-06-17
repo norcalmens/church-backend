@@ -48,20 +48,15 @@ public class SystemSettingController {
     }
 
     // Public read of social-media settings so the footer / topbar icons
-    // resolve to the live values without admin auth. The `enabled` flag is
-    // a master switch -- when false the frontend hides every icon even if
-    // the URLs are filled in (lets an admin pre-load URLs and reveal the
-    // icons at launch time).
+    // resolve to the live values without admin auth.
+    //   enabled         -- master switch (default off). When false the
+    //                      frontend hides every icon regardless of per-icon flags.
+    //   show<Platform>  -- per-icon switches (default true). Let an admin
+    //                      hide one specific icon while leaving the URL saved.
+    // An icon is rendered iff (enabled AND showPlatform AND URL is non-empty).
     @GetMapping("/public/social")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getSocial() {
-        Map<String, Object> body = new HashMap<>();
-        body.put("enabled",   settingService.get(SystemSettingService.KEY_SOCIAL_ENABLED)
-                                            .map(v -> "true".equalsIgnoreCase(v.trim()))
-                                            .orElse(false));   // default: hidden until admin enables
-        body.put("facebook",  settingService.get(SystemSettingService.KEY_SOCIAL_FACEBOOK).orElse(""));
-        body.put("instagram", settingService.get(SystemSettingService.KEY_SOCIAL_INSTAGRAM).orElse(""));
-        body.put("youtube",   settingService.get(SystemSettingService.KEY_SOCIAL_YOUTUBE).orElse(""));
-        return ResponseEntity.ok(ApiResponse.success(body));
+        return ResponseEntity.ok(ApiResponse.success(readSocialState()));
     }
 
     @PutMapping("/social")
@@ -83,20 +78,40 @@ public class SystemSettingController {
                 settingService.set(key, value);
             }
         }
-        // Master enabled flag
-        if (body.containsKey("enabled")) {
-            boolean enabled = Boolean.TRUE.equals(body.get("enabled"))
-                    || "true".equalsIgnoreCase(String.valueOf(body.get("enabled")));
-            settingService.set(SystemSettingService.KEY_SOCIAL_ENABLED, enabled ? "true" : "false");
+        // Master + per-icon boolean flags
+        for (String[] pair : new String[][] {
+                {"enabled",       SystemSettingService.KEY_SOCIAL_ENABLED},
+                {"showFacebook",  SystemSettingService.KEY_SOCIAL_SHOW_FACEBOOK},
+                {"showInstagram", SystemSettingService.KEY_SOCIAL_SHOW_INSTAGRAM},
+                {"showYoutube",   SystemSettingService.KEY_SOCIAL_SHOW_YOUTUBE}}) {
+            String field = pair[0], key = pair[1];
+            if (body.containsKey(field)) {
+                boolean value = Boolean.TRUE.equals(body.get(field))
+                        || "true".equalsIgnoreCase(String.valueOf(body.get(field)));
+                settingService.set(key, value ? "true" : "false");
+            }
         }
-        // Return the current state so the client can sync without a second fetch.
+        return ResponseEntity.ok(ApiResponse.success("Social settings updated", readSocialState()));
+    }
+
+    /** Snapshot every social-related setting at once. Defaults to enabled=false
+     *  + showX=true so a never-configured install hides everything via the
+     *  master switch but pre-grants per-icon visibility once unlocked. */
+    private Map<String, Object> readSocialState() {
         Map<String, Object> out = new HashMap<>();
-        out.put("enabled",   settingService.get(SystemSettingService.KEY_SOCIAL_ENABLED)
-                                            .map(v -> "true".equalsIgnoreCase(v.trim()))
-                                            .orElse(false));
-        out.put("facebook",  settingService.get(SystemSettingService.KEY_SOCIAL_FACEBOOK).orElse(""));
-        out.put("instagram", settingService.get(SystemSettingService.KEY_SOCIAL_INSTAGRAM).orElse(""));
-        out.put("youtube",   settingService.get(SystemSettingService.KEY_SOCIAL_YOUTUBE).orElse(""));
-        return ResponseEntity.ok(ApiResponse.success("Social settings updated", out));
+        out.put("enabled",       readBool(SystemSettingService.KEY_SOCIAL_ENABLED,       false));
+        out.put("showFacebook",  readBool(SystemSettingService.KEY_SOCIAL_SHOW_FACEBOOK,  true));
+        out.put("showInstagram", readBool(SystemSettingService.KEY_SOCIAL_SHOW_INSTAGRAM, true));
+        out.put("showYoutube",   readBool(SystemSettingService.KEY_SOCIAL_SHOW_YOUTUBE,   true));
+        out.put("facebook",      settingService.get(SystemSettingService.KEY_SOCIAL_FACEBOOK).orElse(""));
+        out.put("instagram",     settingService.get(SystemSettingService.KEY_SOCIAL_INSTAGRAM).orElse(""));
+        out.put("youtube",       settingService.get(SystemSettingService.KEY_SOCIAL_YOUTUBE).orElse(""));
+        return out;
+    }
+
+    private boolean readBool(String key, boolean defaultValue) {
+        return settingService.get(key)
+                .map(v -> "true".equalsIgnoreCase(v.trim()))
+                .orElse(defaultValue);
     }
 }

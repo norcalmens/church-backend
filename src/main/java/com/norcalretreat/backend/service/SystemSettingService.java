@@ -14,9 +14,12 @@ public class SystemSettingService {
 
     public static final String KEY_RETREAT_CAPACITY = "retreat.capacity";
     public static final String KEY_SOCIAL_ENABLED   = "social.enabled";
-    public static final String KEY_SOCIAL_FACEBOOK  = "social.facebook.url";
-    public static final String KEY_SOCIAL_INSTAGRAM = "social.instagram.url";
-    public static final String KEY_SOCIAL_YOUTUBE   = "social.youtube.url";
+    public static final String KEY_SOCIAL_FACEBOOK       = "social.facebook.url";
+    public static final String KEY_SOCIAL_INSTAGRAM      = "social.instagram.url";
+    public static final String KEY_SOCIAL_YOUTUBE        = "social.youtube.url";
+    public static final String KEY_SOCIAL_SHOW_FACEBOOK  = "social.facebook.show";
+    public static final String KEY_SOCIAL_SHOW_INSTAGRAM = "social.instagram.show";
+    public static final String KEY_SOCIAL_SHOW_YOUTUBE   = "social.youtube.show";
 
     private final SystemSettingRepository repo;
 
