@@ -47,12 +47,17 @@ public class SystemSettingController {
         return ResponseEntity.ok(ApiResponse.success("Capacity updated", out));
     }
 
-    // Public read of social-media URLs so the footer / topbar icons resolve
-    // to the live values without admin auth. Empty string for any key the
-    // admin hasn't filled in yet -- the frontend hides icons with no URL.
+    // Public read of social-media settings so the footer / topbar icons
+    // resolve to the live values without admin auth. The `enabled` flag is
+    // a master switch -- when false the frontend hides every icon even if
+    // the URLs are filled in (lets an admin pre-load URLs and reveal the
+    // icons at launch time).
     @GetMapping("/public/social")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getSocial() {
-        Map<String, String> body = new HashMap<>();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getSocial() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("enabled",   settingService.get(SystemSettingService.KEY_SOCIAL_ENABLED)
+                                            .map(v -> "true".equalsIgnoreCase(v.trim()))
+                                            .orElse(false));   // default: hidden until admin enables
         body.put("facebook",  settingService.get(SystemSettingService.KEY_SOCIAL_FACEBOOK).orElse(""));
         body.put("instagram", settingService.get(SystemSettingService.KEY_SOCIAL_INSTAGRAM).orElse(""));
         body.put("youtube",   settingService.get(SystemSettingService.KEY_SOCIAL_YOUTUBE).orElse(""));
@@ -60,26 +65,38 @@ public class SystemSettingController {
     }
 
     @PutMapping("/social")
-    public ResponseEntity<ApiResponse<Map<String, String>>> setSocial(@RequestBody Map<String, String> body) {
-        Map<String, String> out = new HashMap<>();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setSocial(@RequestBody Map<String, Object> body) {
+        // URL fields
         for (String[] pair : new String[][] {
                 {"facebook",  SystemSettingService.KEY_SOCIAL_FACEBOOK},
                 {"instagram", SystemSettingService.KEY_SOCIAL_INSTAGRAM},
                 {"youtube",   SystemSettingService.KEY_SOCIAL_YOUTUBE}}) {
             String field = pair[0], key = pair[1];
             if (body.containsKey(field)) {
-                String value = body.get(field) == null ? "" : body.get(field).trim();
+                Object raw = body.get(field);
+                String value = raw == null ? "" : raw.toString().trim();
                 // Basic sanity: only accept http/https URLs or empty (clear).
                 if (!value.isEmpty() && !value.matches("(?i)^https?://.+")) {
                     return ResponseEntity.badRequest().body(ApiResponse.error(
                             field + " must be a http:// or https:// URL (or empty to clear)"));
                 }
                 settingService.set(key, value);
-                out.put(field, value);
-            } else {
-                out.put(field, settingService.get(key).orElse(""));
             }
         }
-        return ResponseEntity.ok(ApiResponse.success("Social links updated", out));
+        // Master enabled flag
+        if (body.containsKey("enabled")) {
+            boolean enabled = Boolean.TRUE.equals(body.get("enabled"))
+                    || "true".equalsIgnoreCase(String.valueOf(body.get("enabled")));
+            settingService.set(SystemSettingService.KEY_SOCIAL_ENABLED, enabled ? "true" : "false");
+        }
+        // Return the current state so the client can sync without a second fetch.
+        Map<String, Object> out = new HashMap<>();
+        out.put("enabled",   settingService.get(SystemSettingService.KEY_SOCIAL_ENABLED)
+                                            .map(v -> "true".equalsIgnoreCase(v.trim()))
+                                            .orElse(false));
+        out.put("facebook",  settingService.get(SystemSettingService.KEY_SOCIAL_FACEBOOK).orElse(""));
+        out.put("instagram", settingService.get(SystemSettingService.KEY_SOCIAL_INSTAGRAM).orElse(""));
+        out.put("youtube",   settingService.get(SystemSettingService.KEY_SOCIAL_YOUTUBE).orElse(""));
+        return ResponseEntity.ok(ApiResponse.success("Social settings updated", out));
     }
 }
