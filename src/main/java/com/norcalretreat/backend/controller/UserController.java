@@ -103,6 +103,21 @@ public class UserController {
         }
     }
 
+    /** Admin diagnostic snapshot of a user's auth state. Returns the
+     *  password-hash PREFIX (first 20 chars) and length so we can confirm
+     *  a change took effect without exposing the full hash, plus all the
+     *  flags that affect login (isActive, isLocked, attempts, lockExpiry).
+     *  Useful when "I changed the password but can't sign in" -- the
+     *  response tells you exactly which flag is blocking it. */
+    @GetMapping("/{id}/diagnostic")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> diagnostic(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(userManagementService.diagnostic(id)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @PostMapping("/{id}/force-logout")
     public ResponseEntity<ApiResponse<Void>> forceLogout(@PathVariable Long id) {
         try {

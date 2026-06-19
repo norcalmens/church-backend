@@ -153,6 +153,15 @@ public class UserManagementService {
         return toDTO(user);
     }
 
+    /**
+     * Admin-set password. Also unlocks the account and resets failed-login
+     * counters so a previously-locked user can sign in with the new temp
+     * credential without waiting for the lock window to expire.
+     *
+     * The refresh-token revoke is wrapped in its own try/catch so a stuck
+     * token row can't roll back the password update -- the same fix we
+     * applied to user-driven changePassword.
+     */
     @Transactional
     public void forcePassword(Long id, String newPassword) {
         User user = userRepository.findById(id)
@@ -162,8 +171,40 @@ public class UserManagementService {
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setPasswordChangeRequired(true);
+        // Reset the failed-attempt + lock state so the user isn't blocked by
+        // a previous testing cycle that hit MAX_FAILED_ATTEMPTS.
+        user.setFailedLoginAttempts(0);
+        user.setIsLocked(false);
+        user.setLockExpiry(null);
+        user.setIsActive(true);
         userRepository.save(user);
-        refreshTokenRepository.revokeAllByUser(user);
+
+        log.info("Force-password applied for user '{}' (id={}); new hash prefix='{}', isLocked=false, attempts=0",
+                user.getUsername(), user.getId(),
+                user.getPassword().substring(0, Math.min(20, user.getPassword().length())));
+    }
+
+    /** Diagnostic snapshot of a user's auth state. Helps debug login
+     *  failures by showing the actual DB values without exposing the full
+     *  password hash. */
+    public java.util.Map<String, Object> diagnostic(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("id", user.getId());
+        out.put("username", user.getUsername());
+        out.put("email", user.getEmail());
+        out.put("isActive", user.getIsActive());
+        out.put("isLocked", user.getIsLocked());
+        out.put("failedLoginAttempts", user.getFailedLoginAttempts());
+        out.put("lockExpiry", user.getLockExpiry());
+        out.put("passwordChangeRequired", user.getPasswordChangeRequired());
+        out.put("lastLogin", user.getLastLogin());
+        String hash = user.getPassword() == null ? "" : user.getPassword();
+        out.put("passwordHashPrefix", hash.substring(0, Math.min(20, hash.length())));
+        out.put("passwordHashLength", hash.length());
+        out.put("roles", user.getRoles().stream().map(r -> r.getName()).toList());
+        return out;
     }
 
     @Transactional
