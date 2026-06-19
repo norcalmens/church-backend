@@ -185,6 +185,15 @@ public class AuthService {
                 null, null, "User logged out", true);
     }
 
+    /**
+     * Persist the new password hash. Runs in its OWN transaction so that
+     * downstream side-effects (refresh-token revoke, audit log) can't roll
+     * the change back via UnexpectedRollbackException. Previously, a
+     * failure inside the audit-log save would mark the wrapping
+     * transaction rollback-only -- the password update appeared to succeed
+     * (HTTP 200) but never actually committed, leaving the user with their
+     * old credentials and no error message.
+     */
     @Transactional
     public void changePassword(String username, ChangePasswordRequest request) {
         User user = userRepository.findByUsername(username)
@@ -198,8 +207,24 @@ public class AuthService {
         user.setPasswordChangeRequired(false);
         userRepository.save(user);
 
-        refreshTokenRepository.revokeAllByUser(user);
+        log.info("Password updated for user '{}' (id={}); new hash prefix='{}'",
+                username, user.getId(),
+                user.getPassword().substring(0, Math.min(20, user.getPassword().length())));
+    }
 
+    /**
+     * Best-effort side effects to run AFTER changePassword has committed.
+     * The controller calls this in its own try/catch; a failure here logs
+     * but cannot undo the password update. Done as a separate public
+     * @Transactional method so each call gets a fresh transaction --
+     * self-invocation inside the same bean would have bypassed the
+     * proxy and re-joined the previous transaction.
+     */
+    @Transactional
+    public void recordPasswordChangeSideEffects(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        refreshTokenRepository.revokeAllByUser(user);
         auditService.logEvent("PASSWORD_CHANGE", username, user.getId(),
                 null, null, "Password changed", true);
     }

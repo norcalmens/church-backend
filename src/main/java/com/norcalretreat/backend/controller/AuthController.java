@@ -78,11 +78,23 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> changePassword(@RequestBody ChangePasswordRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
+            // Commits the new password in its own transaction; if this throws
+            // (e.g. wrong current password), we return 400 below.
             authService.changePassword(username, request);
-            return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
+        // Side effects run AFTER the password commit and in a SEPARATE
+        // transaction. Either one failing now logs but cannot undo the
+        // password update -- which is the bug that was causing "change
+        // succeeds but new password doesn't work".
+        try {
+            authService.recordPasswordChangeSideEffects(username);
+        } catch (RuntimeException e) {
+            log.error("Side-effects after password change failed for '{}'; password update is still in effect",
+                    username, e);
+        }
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
     @PostMapping("/forgot-password")
