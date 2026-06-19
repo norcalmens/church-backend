@@ -26,13 +26,13 @@ public class PaymentPlanController {
     // ===== Admin =====
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'COMMITTEE')")
     public ResponseEntity<List<PaymentPlanDTO>> listAll() {
         return ResponseEntity.ok(service.listAll());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'COMMITTEE')")
     public ResponseEntity<?> get(@PathVariable Long id) {
         try { return ResponseEntity.ok(service.get(id)); }
         catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }

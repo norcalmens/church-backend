@@ -1,0 +1,35 @@
+spring:
+ application:
+    name: retreat-backend
+
+ datasource:
+   url: jdbc:mysql://localhost:3306/retreat_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+   username: washdx01
+   password: "!#RellaTsniLqsyM12"
+   driver-class-name: com.mysql.cj.jdbc.Driver
+
+ jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  health:
+    db:
+      enabled: true

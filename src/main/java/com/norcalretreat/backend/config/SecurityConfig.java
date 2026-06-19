@@ -77,11 +77,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/zoom-links").permitAll()
                         .requestMatchers("/api/zoom-links/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
-                        // Admin-only endpoints
-                        .requestMatchers("/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN")
-                        .requestMatchers("/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN")
+                        // Admin + committee (read-only) endpoints. Committee
+                        // members get GET access to dashboard data sources;
+                        // mutating verbs stay ADMIN/SUPERADMIN only.
+                        .requestMatchers(HttpMethod.GET, "/api/registrations/all").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
+                        .requestMatchers(HttpMethod.GET, "/api/registrations/stats").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
+                        .requestMatchers(HttpMethod.GET, "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
                         .requestMatchers(HttpMethod.DELETE, "/api/registrations/admin/*").hasAnyRole("ADMIN", "SUPERADMIN")
-                        .requestMatchers(HttpMethod.GET,    "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.PATCH,  "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.PUT,    "/api/registrations/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERADMIN")
@@ -92,9 +94,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/payment-intent").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registrations/*/confirm-payment").permitAll()
 
-                        // Waitlist — anyone can join, only admins can read/manage
+                        // Waitlist — anyone can join, committee can read, admins manage
                         .requestMatchers(HttpMethod.POST,   "/api/waitlist").permitAll()
-                        .requestMatchers(HttpMethod.GET,    "/api/waitlist").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.GET,    "/api/waitlist").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
                         .requestMatchers(HttpMethod.PATCH,  "/api/waitlist/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/waitlist/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
@@ -102,9 +104,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/settings/public/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/settings/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
-                        // Feedback -- anyone can submit, only admins can read/manage
+                        // Feedback -- anyone can submit, committee can read, admins delete
                         .requestMatchers(HttpMethod.POST,   "/api/feedback").permitAll()
-                        .requestMatchers(HttpMethod.GET,    "/api/feedback").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.GET,    "/api/feedback").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
                         .requestMatchers(HttpMethod.DELETE, "/api/feedback/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Remaining registration and payment endpoints require authentication

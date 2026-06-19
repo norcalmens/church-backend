@@ -38,8 +38,23 @@ public class DataSeeder {
         return args -> {
             TransactionTemplate tx = new TransactionTemplate(transactionManager);
             tx.executeWithoutResult(status -> seedPermissionsAndRoles());
+            tx.executeWithoutResult(status -> seedCommitteeRole());   // idempotent; adds to old installs
             tx.executeWithoutResult(status -> seedDefaultAdmin());
         };
+    }
+
+    /** Add the COMMITTEE role on existing installs that already have the
+     *  other roles seeded. Pulled out of seedPermissionsAndRoles() because
+     *  that method early-exits when ADMIN exists, so any post-launch role
+     *  addition has to live here. */
+    private void seedCommitteeRole() {
+        if (roleRepository.existsByName("COMMITTEE")) return;
+        log.info("Adding COMMITTEE role to existing install...");
+        Role committeeRole = new Role();
+        committeeRole.setName("COMMITTEE");
+        committeeRole.setDescription("Read-only committee member access");
+        committeeRole.setPermissions(new HashSet<>());   // view-only; gating is in SecurityConfig
+        roleRepository.save(committeeRole);
     }
 
     private void seedPermissionsAndRoles() {
@@ -97,7 +112,23 @@ public class DataSeeder {
         superuserRole.setPermissions(superuserPermissions);
         roleRepository.save(superuserRole);
 
-        log.info("Seeded roles: ADMIN, MEMBER, SUPERADMIN, SUPERUSER with {} permissions", adminPermissions.size());
+        // Create COMMITTEE role -- read-only access to dashboard, registrations,
+        // attendees, donations, feedback, waitlist, payment plans. Cannot edit
+        // or delete anything. The Spring security matchers gate this; the
+        // permissions here are just for any in-app permission checks.
+        if (roleRepository.findByName("COMMITTEE").isEmpty()) {
+            Role committeeRole = new Role();
+            committeeRole.setName("COMMITTEE");
+            committeeRole.setDescription("Read-only committee member access");
+            Set<Permission> committeePermissions = new HashSet<>();
+            committeePermissions.add(viewRegistrations);
+            committeePermissions.add(viewPayments);
+            committeePermissions.add(viewStats);
+            committeeRole.setPermissions(committeePermissions);
+            roleRepository.save(committeeRole);
+        }
+
+        log.info("Seeded roles: ADMIN, MEMBER, SUPERADMIN, SUPERUSER, COMMITTEE with {} permissions", adminPermissions.size());
 
     }
 

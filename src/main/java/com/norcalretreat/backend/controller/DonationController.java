@@ -46,7 +46,7 @@ public class DonationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'COMMITTEE')")
     public ResponseEntity<List<DonationDTO>> listAll() {
         return ResponseEntity.ok(service.listAll());
     }
