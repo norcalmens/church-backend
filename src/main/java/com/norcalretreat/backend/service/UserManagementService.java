@@ -69,12 +69,18 @@ public class UserManagementService {
             throw new IllegalArgumentException("Email is already in use");
         }
 
-        String defaultPassword = "123456";
+        // Use the admin-provided password when present; otherwise generate
+        // a memorable temp string so the admin doesn't have to type one.
+        // Either way the user must change it on first sign-in (the
+        // passwordChangeRequired flag still flips to true below).
+        String tempPassword = request.getPassword() != null && !request.getPassword().isBlank()
+                ? request.getPassword().trim()
+                : generateTempPassword();
 
         User user = new User();
         user.setUsername(username);
         user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(defaultPassword));
+        user.setPassword(passwordEncoder.encode(tempPassword));
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setPasswordChangeRequired(true);
@@ -90,14 +96,31 @@ public class UserManagementService {
         boolean emailSent = false;
         if (emailService != null) {
             try {
-                emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName(), defaultPassword);
+                emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName(), tempPassword);
                 emailSent = true;
             } catch (Exception e) {
                 log.error("Failed to send welcome email to {}", user.getEmail(), e);
             }
         }
 
-        return new CreateUserResponse(toDTO(user), emailSent, defaultPassword);
+        log.info("Created user '{}' (id={}) with temp password (length={}); passwordChangeRequired=true",
+                user.getUsername(), user.getId(), tempPassword.length());
+
+        return new CreateUserResponse(toDTO(user), emailSent, tempPassword);
+    }
+
+    /** Generate an 8-char readable temp password: 3 letters + 4 digits + '!'.
+     *  Not cryptographically tight; it just has to survive one sign-in
+     *  before the user is forced to change it. */
+    private String generateTempPassword() {
+        java.security.SecureRandom rnd = new java.security.SecureRandom();
+        String letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I/O confusion
+        String digits = "23456789";                  // no 0/1 confusion
+        StringBuilder sb = new StringBuilder(8);
+        for (int i = 0; i < 3; i++) sb.append(letters.charAt(rnd.nextInt(letters.length())));
+        for (int i = 0; i < 4; i++) sb.append(digits.charAt(rnd.nextInt(digits.length())));
+        sb.append('!');
+        return sb.toString();
     }
 
     @Transactional
