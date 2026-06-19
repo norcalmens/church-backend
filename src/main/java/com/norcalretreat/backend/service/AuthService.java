@@ -51,32 +51,48 @@ public class AuthService {
         this.emailService = emailService;
     }
 
-    private static final int MAX_FAILED_ATTEMPTS = 5;
+    // Lockout disabled per ops request -- effectively unreachable. Restore
+    // by lowering MAX_FAILED_ATTEMPTS when we want brute-force protection
+    // back. Was: 5 attempts -> 30 min lock.
+    private static final int MAX_FAILED_ATTEMPTS = Integer.MAX_VALUE;
     private static final int LOCK_DURATION_MINUTES = 30;
     private static final int MAX_RESET_REQUESTS_PER_WINDOW = 3;
     private static final int RATE_LIMIT_WINDOW_MINUTES = 15;
 
     @Transactional
     public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        User user = userRepository.findByUsernameOrEmail(request.getUsername(), request.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+        log.info("LOGIN attempt: identifier='{}' from ip={}", request.getUsername(), ipAddress);
 
-        // Check if account is locked
-        if (Boolean.TRUE.equals(user.getIsLocked())) {
-            if (user.getLockExpiry() != null && user.getLockExpiry().isBefore(LocalDateTime.now())) {
-                user.setIsLocked(false);
-                user.setFailedLoginAttempts(0);
-                user.setLockExpiry(null);
-                userRepository.save(user);
-            } else {
-                auditService.logEvent("LOGIN_FAILED", request.getUsername(), user.getId(),
-                        ipAddress, userAgent, "Account is locked", false);
-                throw new IllegalArgumentException("Account is locked. Try again later.");
-            }
+        User user = userRepository.findByUsernameOrEmail(request.getUsername(), request.getUsername())
+                .orElse(null);
+        if (user == null) {
+            log.info("LOGIN failed: no user matched username-or-email='{}'", request.getUsername());
+            throw new IllegalArgumentException("Invalid username or password");
+        }
+        log.info("LOGIN found user id={}, username='{}', isActive={}, isLocked={}, attempts={}, hashPrefix='{}'",
+                user.getId(), user.getUsername(),
+                user.getIsActive(), user.getIsLocked(), user.getFailedLoginAttempts(),
+                user.getPassword() == null ? "" : user.getPassword().substring(0,
+                        Math.min(20, user.getPassword().length())));
+
+        // Auto-clear any pre-existing lock state on every login attempt so an
+        // old lock can never block a current sign-in. The lockout feature is
+        // disabled (MAX_FAILED_ATTEMPTS = Integer.MAX_VALUE) but this keeps
+        // legacy rows from causing surprise rejections.
+        if (Boolean.TRUE.equals(user.getIsLocked())
+                || (user.getFailedLoginAttempts() != null && user.getFailedLoginAttempts() > 0)
+                || user.getLockExpiry() != null) {
+            log.info("LOGIN clearing stale lock state for user '{}': wasLocked={}, attempts={}, lockExpiry={}",
+                    user.getUsername(), user.getIsLocked(), user.getFailedLoginAttempts(), user.getLockExpiry());
+            user.setIsLocked(false);
+            user.setFailedLoginAttempts(0);
+            user.setLockExpiry(null);
+            userRepository.save(user);
         }
 
         // Check if account is active
         if (!Boolean.TRUE.equals(user.getIsActive())) {
+            log.info("LOGIN failed: account inactive for user '{}'", user.getUsername());
             auditService.logEvent("LOGIN_FAILED", request.getUsername(), user.getId(),
                     ipAddress, userAgent, "Account is inactive", false);
             throw new IllegalArgumentException("Account is inactive.");
@@ -86,20 +102,15 @@ public class AuthService {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
         } catch (AuthenticationException e) {
-            int attempts = user.getFailedLoginAttempts() + 1;
-            user.setFailedLoginAttempts(attempts);
-
-            if (attempts >= MAX_FAILED_ATTEMPTS) {
-                user.setIsLocked(true);
-                user.setLockExpiry(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
-                log.warn("Account locked for user: {} after {} failed attempts", request.getUsername(), attempts);
-            }
-
-            userRepository.save(user);
+            log.info("LOGIN failed: authenticate() threw {} for user '{}' -- message='{}'",
+                    e.getClass().getSimpleName(), user.getUsername(), e.getMessage());
+            // Don't increment / lock -- counter stays at 0 because the
+            // lockout is disabled. The audit row still records the failure.
             auditService.logEvent("LOGIN_FAILED", request.getUsername(), user.getId(),
-                    ipAddress, userAgent, "Invalid credentials (attempt " + attempts + ")", false);
+                    ipAddress, userAgent, "Invalid credentials", false);
             throw new IllegalArgumentException("Invalid username or password");
         }
+        log.info("LOGIN success for user '{}'", user.getUsername());
 
         // Success: reset failed attempts, update last login
         user.setFailedLoginAttempts(0);
