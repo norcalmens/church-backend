@@ -47,6 +47,39 @@ public class SystemSettingController {
         return ResponseEntity.ok(ApiResponse.success("Capacity updated", out));
     }
 
+    // Public so the registration page can display "for the 2027 retreat"
+    // without an admin token. Bumping the value is admin-only via PUT.
+    @GetMapping("/public/retreat-year")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getRetreatYear() {
+        int year = settingService.getInt(SystemSettingService.KEY_RETREAT_ACTIVE_YEAR, 2027);
+        Map<String, Object> body = new HashMap<>();
+        body.put("year", year);
+        return ResponseEntity.ok(ApiResponse.success(body));
+    }
+
+    @PutMapping("/retreat-year")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setRetreatYear(@RequestBody Map<String, Object> body) {
+        Object raw = body.get("year");
+        if (raw == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("year is required"));
+        }
+        int year;
+        try {
+            year = Integer.parseInt(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("year must be a 4-digit integer"));
+        }
+        // Bracket loosely — prevents typos (e.g. 202 or 20027) from silently
+        // orphaning every new registration into a nonsense year.
+        if (year < 2020 || year > 2100) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("year must be between 2020 and 2100"));
+        }
+        settingService.set(SystemSettingService.KEY_RETREAT_ACTIVE_YEAR, String.valueOf(year));
+        Map<String, Object> out = new HashMap<>();
+        out.put("year", year);
+        return ResponseEntity.ok(ApiResponse.success("Active retreat year updated", out));
+    }
+
     // Public read of social-media settings so the footer / topbar icons
     // resolve to the live values without admin auth.
     //   enabled         -- master switch (default off). When false the

@@ -40,4 +40,7 @@ public class AttendeeDTO {
     private String congregation;
     private String primaryEmail;
     private String primaryPhone;
+    /** Season this attendee belongs to (from parent registration).
+     *  Powers the year filter on the admin attendees page. */
+    private Integer retreatYear;
 }

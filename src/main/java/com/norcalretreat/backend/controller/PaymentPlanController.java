@@ -3,6 +3,7 @@ package com.norcalretreat.backend.controller;
 import com.norcalretreat.backend.dto.PaymentPlanDTO;
 import com.norcalretreat.backend.dto.PaymentPlanPayResponse;
 import com.norcalretreat.backend.dto.PaymentPlanPaymentDTO;
+import com.norcalretreat.backend.dto.PaymentPlanRequestDTO;
 import com.norcalretreat.backend.service.PaymentPlanService;
 import com.stripe.exception.StripeException;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,17 @@ public class PaymentPlanController {
         catch (IllegalStateException e)   { return ResponseEntity.status(503).body(Map.of("message", e.getMessage())); }
     }
 
+    /** Admin: approve a plan submitted via the public request form.
+     *  Flips status "requested" -> "active" (unlocking pay-by-token) and
+     *  emails the payer the secure pay link. */
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<?> approveRequest(@PathVariable Long id) {
+        try { return ResponseEntity.ok(service.approveRequest(id)); }
+        catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
+        catch (IllegalStateException e)   { return ResponseEntity.status(409).body(Map.of("message", e.getMessage())); }
+    }
+
     @PostMapping("/{id}/payments")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<?> recordPayment(@PathVariable Long id, @RequestBody PaymentPlanPaymentDTO req) {
@@ -85,6 +97,17 @@ public class PaymentPlanController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<?> deletePayment(@PathVariable Long paymentId) {
         try { service.deletePayment(paymentId); return ResponseEntity.noContent().build(); }
+        catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
+    }
+
+    // ===== Public =====
+
+    /** Public "Request a Payment Plan" endpoint. Anyone can POST here --
+     *  saves a plan in status="requested" and pings admin. No pay link is
+     *  issued until an admin approves via /{id}/approve. */
+    @PostMapping("/request")
+    public ResponseEntity<?> requestPlan(@RequestBody PaymentPlanRequestDTO req) {
+        try { return ResponseEntity.ok(service.requestPlan(req)); }
         catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
     }
 

@@ -23,6 +23,7 @@ import java.util.Map;
 public class DonationService {
 
     private final DonationRepository repository;
+    private final RealtimeBroadcaster realtime;
 
     @Transactional
     public DonationCreateResponse create(DonationDTO req) throws StripeException {
@@ -89,6 +90,14 @@ public class DonationService {
         }
         donation = repository.save(donation);
         log.info("Confirmed donation {} — Stripe status: {}", donation.getId(), status);
+        // Ping the admin activity feed on successful captures only; a
+        // "processing" or "failed" transition isn't worth interrupting anyone.
+        if ("paid".equals(donation.getPaymentStatus())) {
+            realtime.broadcastAdminActivity(
+                    "donation",
+                    "New donation",
+                    donation.getDonorName() + " -- $" + donation.getAmount());
+        }
         return toDto(donation);
     }
 
@@ -174,7 +183,7 @@ public class DonationService {
     }
 
     private String buildStripeDescription(Donation d) {
-        String base = "Donation — NorCal Men's Retreat 2026";
+        String base = "Donation — NorCal Men's Retreat 2027";
         return d.getMessage() != null && !d.getMessage().isBlank()
                 ? base + ": " + d.getMessage().trim()
                 : base;

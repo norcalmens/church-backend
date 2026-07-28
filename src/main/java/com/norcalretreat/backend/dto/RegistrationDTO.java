@@ -29,6 +29,10 @@ public class RegistrationDTO {
     private String stripePaymentId;
     private Long userId;
     private LocalDateTime registeredAt;
+    /** Which retreat season this row belongs to (e.g. 2026, 2027). Old
+     *  rows are backfilled on boot. Surfaces on admin list views so the
+     *  operator can see which season a record came from. */
+    private Integer retreatYear;
     private List<AttendeeDTO> attendees;
     private int attendeeCount;
 

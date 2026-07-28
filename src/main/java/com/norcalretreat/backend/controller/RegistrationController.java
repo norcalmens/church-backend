@@ -99,9 +99,15 @@ public class RegistrationController {
     }
 
     // Admin endpoints
+    // Optional ?year=YYYY narrows the list to a single season. Omitting
+    // the param returns EVERY registration across all seasons -- that's
+    // how the admin browses historical rosters (2026 stays queryable).
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<List<RegistrationDTO>>> getAllRegistrations() {
-        List<RegistrationDTO> registrations = registrationService.getAllRegistrations();
+    public ResponseEntity<ApiResponse<List<RegistrationDTO>>> getAllRegistrations(
+            @RequestParam(required = false) Integer year) {
+        List<RegistrationDTO> registrations = (year == null)
+                ? registrationService.getAllRegistrations()
+                : registrationService.getRegistrationsByYear(year);
         return ResponseEntity.ok(ApiResponse.success(registrations));
     }
 

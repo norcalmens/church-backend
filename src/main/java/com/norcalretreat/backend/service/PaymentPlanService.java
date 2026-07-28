@@ -3,6 +3,7 @@ package com.norcalretreat.backend.service;
 import com.norcalretreat.backend.dto.PaymentPlanDTO;
 import com.norcalretreat.backend.dto.PaymentPlanPayResponse;
 import com.norcalretreat.backend.dto.PaymentPlanPaymentDTO;
+import com.norcalretreat.backend.dto.PaymentPlanRequestDTO;
 import com.norcalretreat.backend.entity.PaymentPlan;
 import com.norcalretreat.backend.entity.PaymentPlanPayment;
 import com.norcalretreat.backend.repository.PaymentPlanPaymentRepository;
@@ -34,6 +35,7 @@ public class PaymentPlanService {
 
     private final PaymentPlanRepository plans;
     private final PaymentPlanPaymentRepository payments;
+    private final RealtimeBroadcaster realtime;
 
     private EmailService emailService;
 
@@ -73,6 +75,84 @@ public class PaymentPlanService {
             catch (Exception e) { log.warn("Could not send payment plan invite for {}: {}", p.getId(), e.getMessage()); }
         }
         return toDto(p, List.of());
+    }
+
+    /** Public: someone visited the request-a-plan form and hit submit.
+     *  Creates a plan in status="requested" (NOT active -- pay-by-token is
+     *  gated on "active"), stashes payer-supplied context in the notes field,
+     *  and pings the admin so they can review + approve. No invite email is
+     *  sent to the payer yet -- that fires on approve(). */
+    @Transactional
+    public PaymentPlanDTO requestPlan(PaymentPlanRequestDTO req) {
+        require(req.getPayerName(),   "Name");
+        require(req.getPayerEmail(),  "Email");
+        require(req.getRetreatLabel(),"Retreat");
+        validateAmount(req.getTotalAmount());
+
+        PaymentPlan p = new PaymentPlan();
+        p.setPayerName(req.getPayerName().trim());
+        p.setPayerEmail(req.getPayerEmail().trim());
+        p.setRetreatLabel(req.getRetreatLabel().trim());
+        p.setTotalAmount(req.getTotalAmount());
+        // Auto-derive a plan name; admin can rename on approval. Keeps the
+        // NOT NULL constraint satisfied without forcing the payer to invent
+        // a "plan name" they don't understand.
+        p.setPlanName("Requested by " + p.getPayerName());
+        p.setStatus("requested");
+
+        // Everything the admin needs to size the schedule + reach the payer
+        // if there are questions. Kept in the free-form notes field so we
+        // don't need to grow the entity for one flow.
+        StringBuilder notes = new StringBuilder();
+        notes.append("[Payment plan request]\n");
+        if (req.getPayerPhone() != null && !req.getPayerPhone().isBlank()) {
+            notes.append("Phone: ").append(req.getPayerPhone().trim()).append("\n");
+        }
+        if (req.getPreferredInstallments() != null) {
+            int n = req.getPreferredInstallments();
+            if (n >= 2 && n <= 12) {
+                notes.append("Preferred installments: ").append(n).append("\n");
+            }
+        }
+        if (req.getMessage() != null && !req.getMessage().isBlank()) {
+            notes.append("Message:\n").append(req.getMessage().trim()).append("\n");
+        }
+        p.setNotes(notes.toString());
+
+        p = plans.save(p);
+        log.info("New payment plan REQUEST {} from {} <{}> for {} — total ${}",
+                p.getId(), p.getPayerName(), p.getPayerEmail(), p.getRetreatLabel(), p.getTotalAmount());
+        if (emailService != null) {
+            try { emailService.sendPaymentPlanRequestAdminNotification(p); }
+            catch (Exception e) { log.warn("Could not notify admin of plan request {}: {}", p.getId(), e.getMessage()); }
+        }
+        realtime.broadcastAdminActivity(
+                "payment_plan_request",
+                "New payment plan request",
+                p.getPayerName() + " -- " + p.getRetreatLabel() + " -- $" + p.getTotalAmount());
+        return toDto(p, List.of());
+    }
+
+    /** Admin: approve a requested plan. Flips status to "active" (unlocking
+     *  the pay-by-token endpoints) and emails the payer their invite link.
+     *  Idempotent for the status flip; the invite still gets re-sent on
+     *  every call so admins can use it as a "send now" trigger if the first
+     *  attempt bounced or the plan sat as requested for a while. */
+    @Transactional
+    public PaymentPlanDTO approveRequest(Long planId) {
+        PaymentPlan p = plans.findById(planId)
+                .orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + planId));
+        if ("canceled".equalsIgnoreCase(p.getStatus())) {
+            throw new IllegalStateException("Cannot approve a canceled plan.");
+        }
+        p.setStatus("active");
+        p = plans.save(p);
+        if (emailService != null) {
+            try { emailService.sendPaymentPlanInvite(p); }
+            catch (Exception e) { log.warn("Could not send invite for approved plan {}: {}", p.getId(), e.getMessage()); }
+        }
+        log.info("Approved payment plan request {} — now active, invite sent to {}", p.getId(), p.getPayerEmail());
+        return toDto(p, payments.findByPlanIdOrderByPaidAtDesc(p.getId()));
     }
 
     /** Admin-triggered resend of the invite email (e.g., payer lost the link). */

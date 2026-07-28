@@ -13,6 +13,10 @@ import java.util.Optional;
 public class SystemSettingService {
 
     public static final String KEY_RETREAT_CAPACITY = "retreat.capacity";
+    /** Which retreat year the registration form + counter operates on.
+     *  Bump when opening a new season -- old rows stay tagged by their year
+     *  so historical data isn't lost. Default: 2027. */
+    public static final String KEY_RETREAT_ACTIVE_YEAR = "retreat.active.year";
     public static final String KEY_SOCIAL_ENABLED   = "social.enabled";
     public static final String KEY_SOCIAL_FACEBOOK       = "social.facebook.url";
     public static final String KEY_SOCIAL_INSTAGRAM      = "social.instagram.url";

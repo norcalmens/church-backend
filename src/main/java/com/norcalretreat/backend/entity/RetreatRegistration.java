@@ -77,6 +77,13 @@ public class RetreatRegistration {
     @Column(name = "total_amount", precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
+    /** Which retreat season this registration belongs to. Preserved forever
+     *  so historical rosters stay accessible; the capacity counter and
+     *  registration form filter to only the ACTIVE year (retreat.active.year
+     *  setting). Existing rows are backfilled to 2026 on first boot. */
+    @Column(name = "retreat_year")
+    private Integer retreatYear;
+
     // Metadata
     @Column(name = "user_id", nullable = true)
     private Long userId;

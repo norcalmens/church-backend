@@ -32,6 +32,7 @@ public class RegistrationService {
 
     private final RegistrationRepository registrationRepository;
     private final SystemSettingService settingService;
+    private final RealtimeBroadcaster realtime;
 
     @Value("${retreat.cost-per-person:248.00}")
     private BigDecimal fullRetreatPrice;
@@ -54,8 +55,20 @@ public class RegistrationService {
     @Value("${retreat.capacity:35}")
     private int defaultRetreatCapacity;
 
+    /** Default active year if the retreat.active.year setting is unset.
+     *  Bump this alongside the season change so a fresh install still
+     *  points at the current season. */
+    private static final int DEFAULT_ACTIVE_YEAR = 2027;
+
     private int currentCapacity() {
         return settingService.getInt(SystemSettingService.KEY_RETREAT_CAPACITY, defaultRetreatCapacity);
+    }
+
+    /** Season currently accepting registrations. All new rows are stamped
+     *  with this, and counters (availability, admin list default) filter
+     *  by it. Old seasons stay queryable via the year filter on admin pages. */
+    private int activeYear() {
+        return settingService.getInt(SystemSettingService.KEY_RETREAT_ACTIVE_YEAR, DEFAULT_ACTIVE_YEAR);
     }
 
     private static final Set<String> VALID_DAYS = new HashSet<>(Arrays.asList("thu", "fri", "sat"));
@@ -91,6 +104,7 @@ public class RegistrationService {
 
         RetreatRegistration reg = new RetreatRegistration();
         reg.setUserId(userId);
+        reg.setRetreatYear(activeYear());
         mapDtoToEntity(dto, reg);
 
         if (dto.getAttendees() != null) {
@@ -107,14 +121,25 @@ public class RegistrationService {
         // (matches the bed cap). For day-only registrations we skip position
         // info entirely since they don't claim a numbered slot.
         RegistrationDTO out = convertToDTO(reg);
+        int newOvernightTotal = countOvernightAttendees();
         if (incomingOvernight > 0) {
-            int newOvernightTotal = countOvernightAttendees();
             int firstSlot = newOvernightTotal - incomingOvernight + 1;
             out.setPositionFirst(firstSlot);
             out.setPositionLast(newOvernightTotal);
             out.setTotalAttendees(newOvernightTotal);
             out.setCapacity(capacity);
         }
+        // Live broadcasts: (a) new capacity snapshot to every home-hero
+        // viewer, (b) admin activity toast. Both best-effort -- broadcaster
+        // swallows exceptions so a broker glitch never fails the write.
+        realtime.broadcastCapacity(capacity, newOvernightTotal, activeYear());
+        int attendeeCount = reg.getAttendees() == null ? 0 : reg.getAttendees().size();
+        realtime.broadcastAdminActivity(
+                "registration",
+                "New registration",
+                reg.getFirstName() + " " + reg.getLastName()
+                        + " -- " + attendeeCount + " attendee" + (attendeeCount == 1 ? "" : "s")
+                        + " -- $" + reg.getTotalAmount());
         return out;
     }
 
@@ -130,6 +155,7 @@ public class RegistrationService {
         out.put("overnightAttendees", overnight);
         out.put("spacesLeft", spacesLeft);
         out.put("isFull", spacesLeft == 0);
+        out.put("retreatYear", activeYear());
         return out;
     }
 
@@ -137,8 +163,12 @@ public class RegistrationService {
         return !"partial".equalsIgnoreCase(a.getAttendanceType());
     }
 
+    /** Overnight-attendee count for the ACTIVE season only. Prior seasons
+     *  stay in the table (queryable via admin filters) but don't consume
+     *  the current-year bed cap. */
     private int countOvernightAttendees() {
-        return registrationRepository.findAll().stream()
+        int year = activeYear();
+        return registrationRepository.findByRetreatYear(year).stream()
                 .mapToInt(r -> r.getAttendees() == null ? 0 : (int) r.getAttendees().stream()
                         .filter(a -> !"partial".equalsIgnoreCase(a.getAttendanceType()))
                         .count())
@@ -166,7 +196,7 @@ public class RegistrationService {
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                 .setAmount(amountInCents)
                 .setCurrency("usd")
-                .setDescription("NorCal Men's Retreat 2026 - " + reg.getFirstName() + " " + reg.getLastName())
+                .setDescription("NorCal Men's Retreat 2027 - " + reg.getFirstName() + " " + reg.getLastName())
                 .putMetadata("registration_id", registrationId.toString())
                 .putMetadata("registrant_email", reg.getEmail())
                 .setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.AUTOMATIC)
@@ -268,6 +298,8 @@ public class RegistrationService {
         RetreatRegistration reg = registrationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Registration not found"));
         registrationRepository.delete(reg);
+        // Counter shifts back down; ping the home hero so viewers see it.
+        realtime.broadcastCapacity(currentCapacity(), countOvernightAttendees(), activeYear());
     }
 
     @Transactional
@@ -285,13 +317,28 @@ public class RegistrationService {
                 .collect(Collectors.toList());
     }
 
+    /** Registrations for a single season. Frontend passes retreatYear
+     *  explicitly so the admin can review 2026's roster from the same
+     *  table without a schema fork. */
+    public List<RegistrationDTO> getRegistrationsByYear(int year) {
+        return registrationRepository.findByRetreatYear(year).stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
     public Map<String, Object> getStats() {
-        List<RetreatRegistration> all = registrationRepository.findAll();
+        // Dashboard tiles reflect the ACTIVE season only. Prior seasons stay
+        // in the DB (queryable via the year filter on the registrations page)
+        // but shouldn't inflate current-year totals, revenue, or paid counts.
+        int year = activeYear();
+        List<RetreatRegistration> all = registrationRepository.findByRetreatYear(year);
         long totalRegistrations = all.size();
         long totalAttendees = all.stream()
                 .mapToLong(r -> r.getAttendees().size())
                 .sum();
-        long paidCount = registrationRepository.countByPaymentStatus("paid");
+        long paidCount = all.stream()
+                .filter(r -> "paid".equalsIgnoreCase(r.getPaymentStatus()))
+                .count();
         BigDecimal totalRevenue = all.stream()
                 .filter(r -> "paid".equals(r.getPaymentStatus()))
                 .map(RetreatRegistration::getTotalAmount)
@@ -322,6 +369,8 @@ public class RegistrationService {
         stats.put("paidRegistrations", paidCount);
         stats.put("totalRevenue", totalRevenue);
         stats.put("dayAttendance", dayCounts);
+        // Expose the year the numbers reflect so the dashboard can label them.
+        stats.put("retreatYear", year);
         return stats;
     }
 
@@ -463,6 +512,7 @@ public class RegistrationService {
         dto.setStripePaymentId(reg.getStripePaymentId());
         dto.setUserId(reg.getUserId());
         dto.setRegisteredAt(reg.getRegisteredAt());
+        dto.setRetreatYear(reg.getRetreatYear());
         dto.setAttendeeCount(reg.getAttendees().size());
         dto.setAttendees(reg.getAttendees().stream()
                 .map(this::convertAttendeeToDTO)
@@ -490,6 +540,7 @@ public class RegistrationService {
             dto.setCongregation(parent.getCongregation());
             dto.setPrimaryEmail(parent.getEmail());
             dto.setPrimaryPhone(parent.getPhone());
+            dto.setRetreatYear(parent.getRetreatYear());
         }
         return dto;
     }

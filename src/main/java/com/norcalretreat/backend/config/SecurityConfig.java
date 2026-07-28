@@ -48,6 +48,11 @@ public class SecurityConfig {
                         // Health check
                         .requestMatchers("/api/health").permitAll()
 
+                        // WebSocket handshake endpoint -- STOMP CONNECT frame
+                        // carries the JWT and is validated by WebSocketConfig.
+                        // The HTTP handshake itself is open.
+                        .requestMatchers("/ws/**").permitAll()
+
                         // Stripe webhook (public callback)
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
 
@@ -62,7 +67,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/donations/*/confirm").permitAll()
                         .requestMatchers("/api/donations/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
-                        // Payment plans: tokenized public portal endpoints, admin-only everything else
+                        // Payment plans: public "request a plan" + tokenized portal endpoints,
+                        // admin-only for everything else (list, create, approve, edit, delete).
+                        .requestMatchers(HttpMethod.POST, "/api/payment-plans/request").permitAll()
                         .requestMatchers(HttpMethod.GET,  "/api/payment-plans/by-token/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/pay").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/by-token/*/payments/*/confirm").permitAll()

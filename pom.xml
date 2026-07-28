@@ -42,6 +42,14 @@
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 
+		<!-- WebSocket + STOMP: powers live capacity counter (public topic)
+		     and live admin activity toast (auth-gated topic). Uses the
+		     built-in simple broker; no external message broker required. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+
 		<!-- MySQL -->
 		<dependency>
 			<groupId>com.mysql</groupId>

@@ -54,7 +54,7 @@ public class EmailService {
         body.append("This link will expire in 1 hour.\n\n");
         body.append("If you did not request a password reset, you can safely ignore this email. ");
         body.append("Your password will not be changed.\n\n");
-        body.append("— NorCal Men's Retreat 2026");
+        body.append("— NorCal Men's Retreat 2027");
 
         message.setText(body.toString());
 
@@ -71,7 +71,7 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(toEmail);
-        message.setSubject("Welcome to NorCal Men's Retreat 2026");
+        message.setSubject("Welcome to NorCal Men's Retreat 2027");
 
         String greeting = (firstName != null && !firstName.isEmpty())
                 ? "Hi " + firstName + ","
@@ -81,12 +81,12 @@ public class EmailService {
 
         StringBuilder body = new StringBuilder();
         body.append(greeting).append("\n\n");
-        body.append("An account has been created for you for the NorCal Men's Retreat 2026.\n\n");
+        body.append("An account has been created for you for the NorCal Men's Retreat 2027.\n\n");
         body.append("Your temporary password is: ").append(defaultPassword).append("\n\n");
         body.append("Please visit the link below to complete your registration and set a new password:\n");
         body.append(registerUrl).append("\n\n");
         body.append("If you did not expect this email, you can safely ignore it.\n\n");
-        body.append("— NorCal Men's Retreat 2026");
+        body.append("— NorCal Men's Retreat 2027");
 
         message.setText(body.toString());
 
@@ -102,7 +102,7 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(toEmail);
-        message.setSubject("Account Activated - NorCal Men's Retreat 2026");
+        message.setSubject("Account Activated - NorCal Men's Retreat 2027");
 
         String greeting = (firstName != null && !firstName.isEmpty())
                 ? "Hi " + firstName + ","
@@ -115,7 +115,7 @@ public class EmailService {
         body.append("Your NorCal Men's Retreat account has been activated successfully!\n\n");
         body.append("You can now log in at:\n");
         body.append(loginUrl).append("\n\n");
-        body.append("— NorCal Men's Retreat 2026");
+        body.append("— NorCal Men's Retreat 2027");
 
         message.setText(body.toString());
 
@@ -131,11 +131,11 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(reg.getEmail());
-        message.setSubject("Registration Confirmation - NorCal Men's Retreat 2026");
+        message.setSubject("Registration Confirmation - NorCal Men's Retreat 2027");
 
         StringBuilder body = new StringBuilder();
         body.append("Hi ").append(reg.getFirstName()).append(",\n\n");
-        body.append("Thank you for registering for the NorCal Men's Retreat 2026!\n\n");
+        body.append("Thank you for registering for the NorCal Men's Retreat 2027!\n\n");
         body.append("Registration Details:\n");
         body.append("  Name: ").append(reg.getFirstName()).append(" ").append(reg.getLastName()).append("\n");
         body.append("  Attendees: ").append(reg.getAttendees().size()).append("\n");
@@ -143,10 +143,10 @@ public class EmailService {
         body.append("  Payment Status: ").append(reg.getPaymentStatus()).append("\n\n");
         appendAttendeeBreakdown(body, reg);
         body.append("Event Details:\n");
-        body.append("  Dates: June 11-13, 2026\n");
+        body.append("  Dates: April 15-17, 2027\n");
         body.append("  Venue: Alliance Redwoods, 5000 Bohemian Highway, Occidental, CA 95465\n\n");
         body.append("If you have any questions, please contact us.\n\n");
-        body.append("— NorCal Men's Retreat 2026");
+        body.append("— NorCal Men's Retreat 2027");
 
         message.setText(body.toString());
 
@@ -162,18 +162,18 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(reg.getEmail());
-        message.setSubject("Payment Receipt - NorCal Men's Retreat 2026");
+        message.setSubject("Payment Receipt - NorCal Men's Retreat 2027");
 
         StringBuilder body = new StringBuilder();
         body.append("Hi ").append(reg.getFirstName()).append(",\n\n");
-        body.append("We have received your payment for the NorCal Men's Retreat 2026.\n\n");
+        body.append("We have received your payment for the NorCal Men's Retreat 2027.\n\n");
         body.append("Payment Details:\n");
         body.append("  Amount: $").append(reg.getTotalAmount()).append("\n");
         body.append("  Payment ID: ").append(paymentId).append("\n");
         body.append("  Status: Paid\n\n");
         appendAttendeeBreakdown(body, reg);
-        body.append("We look forward to seeing you June 11-13, 2026!\n\n");
-        body.append("— NorCal Men's Retreat 2026");
+        body.append("We look forward to seeing you April 15-17, 2027!\n\n");
+        body.append("— NorCal Men's Retreat 2027");
 
         message.setText(body.toString());
 
@@ -219,6 +219,49 @@ public class EmailService {
             log.info("Payment plan invite sent to {} for plan {}", plan.getPayerEmail(), plan.getId());
         } catch (Exception e) {
             log.error("Failed to send payment plan invite to {}", plan.getPayerEmail(), e);
+        }
+    }
+
+    /** Fires when someone submits the public "Request a Payment Plan" form.
+     *  Goes to the retreat contact address so an admin sees it and can
+     *  approve the plan (which auto-sends the payer their invite link).
+     *  No-op when retreat.contact-email is unset -- request is still saved
+     *  and visible in the admin plans table; only the ping is skipped. */
+    public void sendPaymentPlanRequestAdminNotification(PaymentPlan plan) {
+        if (contactEmail == null || contactEmail.isBlank()) return;
+        if (plan == null) return;
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(contactEmail);
+        // ReplyTo the payer so the admin can just hit Reply to talk with them
+        // without hunting down the email address.
+        if (plan.getPayerEmail() != null && !plan.getPayerEmail().isBlank()) {
+            message.setReplyTo(plan.getPayerEmail());
+        }
+        message.setSubject("New Payment Plan Request: " + plan.getPayerName()
+                + " ($" + plan.getTotalAmount() + ")");
+
+        StringBuilder body = new StringBuilder();
+        body.append("Someone requested a payment plan through the website.\n\n");
+        body.append("Payer: ").append(plan.getPayerName()).append("\n");
+        body.append("Email: ").append(plan.getPayerEmail()).append("\n");
+        body.append("Retreat: ").append(plan.getRetreatLabel()).append("\n");
+        body.append("Total: $").append(plan.getTotalAmount()).append("\n\n");
+        if (plan.getNotes() != null && !plan.getNotes().isBlank()) {
+            body.append(plan.getNotes()).append("\n");
+        }
+        body.append("Review + approve in the admin dashboard:\n");
+        body.append(frontendUrl).append("/admin/payment-plans\n\n");
+        body.append("Approving flips the plan to active and emails the payer their secure pay link.");
+
+        message.setText(body.toString());
+
+        try {
+            mailSender.send(message);
+            log.info("Payment plan request notification sent to {} for plan {}", contactEmail, plan.getId());
+        } catch (Exception e) {
+            log.error("Failed to send payment plan request notification", e);
         }
     }
 
