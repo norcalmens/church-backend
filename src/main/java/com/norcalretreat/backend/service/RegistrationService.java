@@ -34,10 +34,10 @@ public class RegistrationService {
     private final SystemSettingService settingService;
     private final RealtimeBroadcaster realtime;
 
-    @Value("${retreat.cost-per-person:248.00}")
+    @Value("${retreat.cost-per-person:280.00}")
     private BigDecimal fullRetreatPrice;
 
-    @Value("${retreat.cost-per-day:85.00}")
+    @Value("${retreat.cost-per-day:90.00}")
     private BigDecimal perDayPrice;
 
     @Value("${retreat.linen-package-price:25.00}")

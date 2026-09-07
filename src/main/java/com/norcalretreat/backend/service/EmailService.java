@@ -328,7 +328,7 @@ public class EmailService {
                 lines.add("Single-day meals: full day, 3 meals — $65");
             }
         } else {
-            lines.add("Full retreat (3 days, lodging incl.) — $248");
+            lines.add("Full retreat (3 days, lodging incl.) — $280");
             if ("package".equalsIgnoreCase(a.getLinenOption())) {
                 lines.add("Linen & towel package — $25");
             } else if ("individual".equalsIgnoreCase(a.getLinenOption())) {
