@@ -5,6 +5,7 @@ import com.norcalretreat.backend.entity.PaymentPlan;
 import com.norcalretreat.backend.entity.RetreatRegistration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.mail.SimpleMailMessage;
@@ -35,6 +36,33 @@ public class EmailService {
     @Value("${app.frontend-url:http://localhost:4200}")
     private String frontendUrl;
 
+    // Optional -- when present, every send is logged to sent_emails so
+    // admin can review attempts (successes and failures) in /admin/emails.
+    private EmailLogService emailLog;
+
+    @Autowired(required = false)
+    public void setEmailLog(EmailLogService emailLog) {
+        this.emailLog = emailLog;
+    }
+
+    /** Send a message through the log wrapper so every attempt persists.
+     *  Re-throws SMTP failures so callers that care (admin-triggered
+     *  resends) can surface the error to the UI; fire-and-forget callers
+     *  wrap this in try/catch (they already do). */
+    private void sendAndLog(String category, SimpleMailMessage message,
+                            String relatedType, Long relatedId) {
+        String to = (message.getTo() != null && message.getTo().length > 0)
+                ? message.getTo()[0] : "";
+        String subj = message.getSubject();
+        String body = message.getText();
+        if (emailLog != null) {
+            emailLog.wrap(category, to, subj, body, relatedType, relatedId, null,
+                    v -> mailSender.send(message));
+        } else {
+            mailSender.send(message);
+        }
+    }
+
     public void sendPasswordResetEmail(String toEmail, String rawToken, String firstName) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
@@ -59,7 +87,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("password_reset", message, null, null);
             log.info("Password reset email sent to {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send password reset email to {}", toEmail, e);
@@ -91,7 +119,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("welcome", message, "user", null);
             log.info("Welcome email sent to {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send welcome email to {}", toEmail, e);
@@ -120,7 +148,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("account_activated", message, "user", null);
             log.info("Account activated email sent to {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send account activated email to {}", toEmail, e);
@@ -151,7 +179,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("registration_confirmation", message, "registration", reg.getId());
             log.info("Registration confirmation email sent to {}", reg.getEmail());
         } catch (Exception e) {
             log.error("Failed to send registration confirmation to {}", reg.getEmail(), e);
@@ -178,7 +206,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("payment_receipt", message, "registration", reg.getId());
             log.info("Payment receipt sent to {}", reg.getEmail());
         } catch (Exception e) {
             log.error("Failed to send payment receipt to {}", reg.getEmail(), e);
@@ -228,7 +256,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("payment_plan_invite", message, "payment_plan", plan.getId());
             log.info("Payment plan invite sent to {} for plan {}", plan.getPayerEmail(), plan.getId());
         } catch (Exception e) {
             log.error("Failed to send payment plan invite to {}", plan.getPayerEmail(), e);
@@ -275,7 +303,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("payment_plan_request_notification", message, "payment_plan", plan.getId());
             log.info("Payment plan request notification sent to {} for plan {}", contactEmail, plan.getId());
         } catch (Exception e) {
             log.error("Failed to send payment plan request notification", e);
@@ -302,7 +330,7 @@ public class EmailService {
         message.setText(body.toString());
 
         try {
-            mailSender.send(message);
+            sendAndLog("admin_notification", message, "registration", reg.getId());
             log.info("Admin notification sent for registration by {}", reg.getEmail());
         } catch (Exception e) {
             log.error("Failed to send admin notification", e);

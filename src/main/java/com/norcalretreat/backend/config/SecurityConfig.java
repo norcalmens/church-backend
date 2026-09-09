@@ -77,6 +77,11 @@ public class SecurityConfig {
                         // clean 401 for anonymous requests instead of 403.
                         .requestMatchers("/api/meeting-notes/**").authenticated()
 
+                        // Email log: admin/superadmin only (contains PII +
+                        // reset tokens). Controller-level @PreAuthorize does
+                        // the role check; this makes anonymous requests 401.
+                        .requestMatchers("/api/emails/**").authenticated()
+
                         // Payment plans: public "request a plan" + tokenized portal endpoints,
                         // admin-only for everything else (list, create, approve, edit, delete).
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/request").permitAll()
