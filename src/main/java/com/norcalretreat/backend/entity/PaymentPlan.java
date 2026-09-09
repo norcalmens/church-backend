@@ -41,6 +41,24 @@ public class PaymentPlan {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // ---- Capacity impact -------------------------------------------------
+    // People on payment plans are still attending; they count against the
+    // overnight bed cap the same as anyone in retreat_registrations.
+    // These fields let the capacity calculator include them:
+    //   retreatYear         -- which season this plan is for; matched
+    //                          against retreat.active.year for the counter.
+    //   overnightAttendees  -- how many beds this plan reserves. Defaults
+    //                          to 1 (the payer themselves); admin can bump
+    //                          it for family/group plans.
+    // Only "active" and "completed" plans count -- "requested" is still
+    // provisional (admin may reject), "canceled" no longer attending.
+
+    @Column(name = "retreat_year")
+    private Integer retreatYear;
+
+    @Column(name = "overnight_attendees")
+    private Integer overnightAttendees = 1;
+
     // ===== Recurring (Stripe Subscription) =====
     @Column(name = "stripe_customer_id", length = 64)
     private String stripeCustomerId;

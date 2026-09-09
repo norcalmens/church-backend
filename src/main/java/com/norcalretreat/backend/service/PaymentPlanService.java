@@ -35,6 +35,18 @@ public class PaymentPlanService {
 
     private final PaymentPlanRepository plans;
     private final PaymentPlanPaymentRepository payments;
+    private SystemSettingService settingService;
+    private RegistrationService registrationService;
+
+    @Autowired(required = false)
+    public void setSettingService(SystemSettingService settingService) {
+        this.settingService = settingService;
+    }
+
+    @Autowired(required = false)
+    public void setRegistrationService(RegistrationService registrationService) {
+        this.registrationService = registrationService;
+    }
     private final RealtimeBroadcaster realtime;
 
     private EmailService emailService;
@@ -99,6 +111,11 @@ public class PaymentPlanService {
         // a "plan name" they don't understand.
         p.setPlanName("Requested by " + p.getPayerName());
         p.setStatus("requested");
+        // Requested plans still reserve a bed once approved -- default to
+        // 1 overnight for the current season so the capacity math has the
+        // right numbers as soon as admin flips status to "active".
+        p.setRetreatYear(defaultRetreatYear());
+        p.setOvernightAttendees(1);
 
         // Everything the admin needs to size the schedule + reach the payer
         // if there are questions. Kept in the free-form notes field so we
@@ -152,6 +169,13 @@ public class PaymentPlanService {
             catch (Exception e) { log.warn("Could not send invite for approved plan {}: {}", p.getId(), e.getMessage()); }
         }
         log.info("Approved payment plan request {} — now active, invite sent to {}", p.getId(), p.getPayerEmail());
+        // Approval flips the plan to "active" and it now counts toward the
+        // overnight cap -- push a fresh capacity snapshot so the home hero
+        // counter ticks up in real time.
+        if (registrationService != null) {
+            try { registrationService.publishCapacityUpdate(); }
+            catch (Exception e) { log.warn("Capacity broadcast after plan approval failed: {}", e.getMessage()); }
+        }
         return toDto(p, payments.findByPlanIdOrderByPaidAtDesc(p.getId()));
     }
 
@@ -177,10 +201,17 @@ public class PaymentPlanService {
 
     @Transactional
     public void delete(Long id) {
-        if (!plans.existsById(id)) throw new IllegalArgumentException("PaymentPlan not found: " + id);
+        PaymentPlan p = plans.findById(id).orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + id));
+        boolean wasReservingBeds = ("active".equalsIgnoreCase(p.getStatus()) || "completed".equalsIgnoreCase(p.getStatus()))
+                && p.getOvernightAttendees() != null && p.getOvernightAttendees() > 0;
         payments.deleteAll(payments.findByPlanIdOrderByPaidAtDesc(id));
         plans.deleteById(id);
         log.info("Deleted PaymentPlan {}", id);
+        // Deleting an active/completed plan frees up its reserved beds --
+        // refresh the counter so viewers see the number tick down.
+        if (wasReservingBeds && registrationService != null) {
+            try { registrationService.publishCapacityUpdate(); } catch (Exception ignore) {}
+        }
     }
 
     // ===== Admin: manual payments (cash/check) =====
@@ -485,6 +516,32 @@ public class PaymentPlanService {
         p.setTotalAmount(req.getTotalAmount());
         p.setNotes(req.getNotes());
         if (req.getStatus() != null && !req.getStatus().isBlank()) p.setStatus(req.getStatus());
+        // Capacity fields -- default to a sensible value so admin doesn't
+        // have to remember to set them on every plan. retreatYear defaults
+        // to the currently-active season; overnightAttendees defaults to 1.
+        if (req.getRetreatYear() != null) {
+            p.setRetreatYear(req.getRetreatYear());
+        } else if (p.getRetreatYear() == null) {
+            p.setRetreatYear(defaultRetreatYear());
+        }
+        if (req.getOvernightAttendees() != null && req.getOvernightAttendees() >= 0) {
+            p.setOvernightAttendees(req.getOvernightAttendees());
+        } else if (p.getOvernightAttendees() == null) {
+            p.setOvernightAttendees(1);
+        }
+    }
+
+    /** Reads retreat.active.year from settings; falls back to 2027 if
+     *  the setting is unset or the service isn't wired. Kept local so
+     *  PaymentPlanService isn't tightly coupled to RegistrationService. */
+    private int defaultRetreatYear() {
+        if (settingService == null) return 2027;
+        try {
+            return settingService.getInt(
+                    SystemSettingService.KEY_RETREAT_ACTIVE_YEAR, 2027);
+        } catch (Exception e) {
+            return 2027;
+        }
     }
 
     private void require(String v, String label) {
@@ -527,6 +584,8 @@ public class PaymentPlanService {
         dto.setPayerToken(p.getPayerToken());
         dto.setStatus(p.getStatus());
         dto.setNotes(p.getNotes());
+        dto.setRetreatYear(p.getRetreatYear());
+        dto.setOvernightAttendees(p.getOvernightAttendees());
         dto.setStripeCustomerId(p.getStripeCustomerId());
         dto.setStripeSubscriptionId(p.getStripeSubscriptionId());
         dto.setRecurringAmount(p.getRecurringAmount());

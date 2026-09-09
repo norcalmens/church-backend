@@ -33,6 +33,7 @@ public class RegistrationService {
     private final RegistrationRepository registrationRepository;
     private final SystemSettingService settingService;
     private final RealtimeBroadcaster realtime;
+    private final com.norcalretreat.backend.repository.PaymentPlanRepository paymentPlanRepository;
 
     @Value("${retreat.cost-per-person:280.00}")
     private BigDecimal fullRetreatPrice;
@@ -143,6 +144,13 @@ public class RegistrationService {
         return out;
     }
 
+    /** Publish a fresh capacity snapshot to every viewer of the home
+     *  hero. Exposed so other services (payment plans) can trigger a
+     *  refresh when they make a change that affects the overnight count. */
+    public void publishCapacityUpdate() {
+        realtime.broadcastCapacity(currentCapacity(), countOvernightAttendees(), activeYear());
+    }
+
     public Map<String, Object> getAvailability() {
         int capacity = currentCapacity();
         int overnight = countOvernightAttendees();
@@ -163,16 +171,21 @@ public class RegistrationService {
         return !"partial".equalsIgnoreCase(a.getAttendanceType());
     }
 
-    /** Overnight-attendee count for the ACTIVE season only. Prior seasons
-     *  stay in the table (queryable via admin filters) but don't consume
-     *  the current-year bed cap. */
+    /** Overnight-attendee count for the ACTIVE season only. Combines:
+     *   - full-retreat attendees on retreat_registrations rows for this year
+     *   - overnight beds reserved by ACTIVE/COMPLETED payment plans for this
+     *     year (people paying via installments; still attending)
+     *  Prior seasons stay in the table (queryable via admin filters) but
+     *  don't consume the current-year bed cap. */
     private int countOvernightAttendees() {
         int year = activeYear();
-        return registrationRepository.findByRetreatYear(year).stream()
+        int fromRegistrations = registrationRepository.findByRetreatYear(year).stream()
                 .mapToInt(r -> r.getAttendees() == null ? 0 : (int) r.getAttendees().stream()
                         .filter(a -> !"partial".equalsIgnoreCase(a.getAttendanceType()))
                         .count())
                 .sum();
+        long fromPlans = paymentPlanRepository.sumOvernightAttendeesForYear(year);
+        return fromRegistrations + (int) fromPlans;
     }
 
     @SuppressWarnings("unused")
@@ -437,7 +450,19 @@ public class RegistrationService {
         attendee.setAmountPaid(computeAttendeeCost(attendee));
         attendee.setRegistration(reg);
         attendee.setSpeaker(Boolean.TRUE.equals(aDto.getSpeaker()));
+
+        // Optional per-attendee emergency contact -- trim + null-empty so
+        // an all-blank form doesn't store empty strings in the DB.
+        attendee.setEmergencyName(trimToNull(aDto.getEmergencyName()));
+        attendee.setEmergencyRelationship(trimToNull(aDto.getEmergencyRelationship()));
+        attendee.setEmergencyPhone(trimToNull(aDto.getEmergencyPhone()));
         return attendee;
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private BigDecimal computeAttendeeCost(Attendee a) {
@@ -534,6 +559,9 @@ public class RegistrationService {
         dto.setMealOption(attendee.getMealOption());
         dto.setAmountPaid(attendee.getAmountPaid());
         dto.setSpeaker(attendee.getSpeaker() != null && attendee.getSpeaker());
+        dto.setEmergencyName(attendee.getEmergencyName());
+        dto.setEmergencyRelationship(attendee.getEmergencyRelationship());
+        dto.setEmergencyPhone(attendee.getEmergencyPhone());
         RetreatRegistration parent = attendee.getRegistration();
         if (parent != null) {
             dto.setRegistrationId(parent.getId());

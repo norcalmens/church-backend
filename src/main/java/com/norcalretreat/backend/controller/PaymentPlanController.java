@@ -63,9 +63,23 @@ public class PaymentPlanController {
     @PostMapping("/{id}/resend-invite")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<?> resendInvite(@PathVariable Long id) {
-        try { service.resendInvite(id); return ResponseEntity.noContent().build(); }
-        catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
-        catch (IllegalStateException e)   { return ResponseEntity.status(503).body(Map.of("message", e.getMessage())); }
+        try {
+            service.resendInvite(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            // Bad input (plan not found, no payer email on file, etc.)
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            // Email service not configured in this environment
+            return ResponseEntity.status(503).body(Map.of("message", e.getMessage()));
+        } catch (RuntimeException e) {
+            // SMTP send failed (bad creds, network, throttled, etc.) --
+            // surface the reason so admin sees something actionable instead
+            // of a phantom "email sent" toast.
+            log.error("resendInvite failed for plan {}", id, e);
+            return ResponseEntity.status(502).body(Map.of(
+                    "message", "Could not send invite email: " + e.getMessage()));
+        }
     }
 
     /** Admin: approve a plan submitted via the public request form.

@@ -185,8 +185,21 @@ public class EmailService {
         }
     }
 
+    /**
+     * Sends the payment-plan invite (with the token pay link) to the payer.
+     *
+     * Throws on any failure so admin-triggered resends surface a real error
+     * in the UI instead of a phantom "success" toast when SMTP is broken /
+     * unconfigured / rate-limited. Auto-triggered sends (on create/approve)
+     * still get non-fatal treatment via caller-side try/catch.
+     */
     public void sendPaymentPlanInvite(PaymentPlan plan) {
-        if (plan == null || plan.getPayerEmail() == null || plan.getPayerEmail().isBlank()) return;
+        if (plan == null) {
+            throw new IllegalArgumentException("Plan is required");
+        }
+        if (plan.getPayerEmail() == null || plan.getPayerEmail().isBlank()) {
+            throw new IllegalStateException("Plan has no payer email address");
+        }
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(plan.getPayerEmail());
@@ -219,6 +232,10 @@ public class EmailService {
             log.info("Payment plan invite sent to {} for plan {}", plan.getPayerEmail(), plan.getId());
         } catch (Exception e) {
             log.error("Failed to send payment plan invite to {}", plan.getPayerEmail(), e);
+            // Re-throw so admin-triggered resends surface the failure to
+            // the UI. Auto-sends (on create/approve) wrap this in their
+            // own try/catch to keep the underlying write non-fatal.
+            throw new RuntimeException("Email send failed: " + e.getMessage(), e);
         }
     }
 

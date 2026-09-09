@@ -17,6 +17,11 @@ public class PaymentPlanDTO {
     private String status;
     private String notes;
 
+    /** Which retreat season this plan reserves capacity for. */
+    private Integer retreatYear;
+    /** How many overnight beds this plan holds against the cap. */
+    private Integer overnightAttendees;
+
     // Recurring (Stripe Subscription)
     private String stripeCustomerId;
     private String stripeSubscriptionId;

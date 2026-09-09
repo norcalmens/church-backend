@@ -67,6 +67,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/donations/*/confirm").permitAll()
                         .requestMatchers("/api/donations/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
+                        // Event RSVPs: public GET/POST on /public/{eventKey}; admin owns the rest.
+                        .requestMatchers(HttpMethod.GET,  "/api/rsvp/public/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/rsvp/public/*").permitAll()
+                        .requestMatchers("/api/rsvp/**").hasAnyRole("ADMIN", "SUPERADMIN", "COMMITTEE")
+
+                        // Meeting notes: committee-internal only. Controller
+                        // has method-level @PreAuthorize; this line ensures a
+                        // clean 401 for anonymous requests instead of 403.
+                        .requestMatchers("/api/meeting-notes/**").authenticated()
+
                         // Payment plans: public "request a plan" + tokenized portal endpoints,
                         // admin-only for everything else (list, create, approve, edit, delete).
                         .requestMatchers(HttpMethod.POST, "/api/payment-plans/request").permitAll()

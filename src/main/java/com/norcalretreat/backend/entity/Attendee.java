@@ -54,6 +54,21 @@ public class Attendee {
     @Column(name = "speaker", nullable = false)
     private Boolean speaker = false;
 
+    // ---- Per-attendee emergency contact (optional) --------------------
+    // Registrants may bring family/friends whose emergency contact isn't
+    // the same as the primary registrant's -- e.g. a friend attending
+    // together should list their own spouse, not the registrant's. All
+    // three are optional; if left blank the primary registration's
+    // emergency contact acts as the fallback.
+    @Column(name = "emergency_name", length = 200)
+    private String emergencyName;
+
+    @Column(name = "emergency_relationship", length = 100)
+    private String emergencyRelationship;
+
+    @Column(name = "emergency_phone", length = 20)
+    private String emergencyPhone;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
     @JsonIgnore

@@ -34,6 +34,12 @@ public class AttendeeDTO {
     /** Admin-set: true if this individual is a retreat speaker. */
     private Boolean speaker;
 
+    /** Optional per-attendee emergency contact. Falls back to the primary
+     *  registration's emergency contact when blank. */
+    private String emergencyName;
+    private String emergencyRelationship;
+    private String emergencyPhone;
+
     // Hoisted from parent registration so an attendee-flat admin view can
     // show contact info and church without re-joining server-side.
     private Long registrationId;
