@@ -184,7 +184,8 @@ public class PaymentPlanService {
         PaymentPlan p = plans.findById(planId)
                 .orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + planId));
         if (emailService == null) {
-            throw new IllegalStateException("Email service is not configured in this environment.");
+            throw new IllegalStateException("Email service is not configured — JavaMailSender bean was not created at startup. " +
+                    "Check MAIL_HOST/MAIL_USERNAME/MAIL_PASSWORD env vars on Railway have real values, then see the boot log line 'MAIL DIAGNOSTIC:'.");
         }
         emailService.sendPaymentPlanInvite(p);
         log.info("Resent payment plan invite for plan {} to {}", p.getId(), p.getPayerEmail());
