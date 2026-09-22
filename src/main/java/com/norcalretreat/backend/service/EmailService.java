@@ -3,11 +3,10 @@ package com.norcalretreat.backend.service;
 import com.norcalretreat.backend.entity.Attendee;
 import com.norcalretreat.backend.entity.PaymentPlan;
 import com.norcalretreat.backend.entity.RetreatRegistration;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -19,13 +18,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/** Always registered so callers don't need to check for a missing bean —
+ *  {@link #isReady()} tells them whether outbound mail is configured, and
+ *  every send method throws IllegalStateException when it isn't. Uses
+ *  ObjectProvider for the JavaMailSender so classpath/auto-config ordering
+ *  can't skip this bean the way {@code @ConditionalOnBean} used to. */
 @Slf4j
 @Service
-@ConditionalOnBean(JavaMailSender.class)
-@RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender mailSender;
+    private final JavaMailSender mailSender; // null when Spring Boot didn't autoconfigure one
+
+    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider) {
+        this.mailSender = mailSenderProvider.getIfAvailable();
+    }
+
+    /** True when JavaMailSender was autoconfigured (spring.mail.host set + starter present). */
+    public boolean isReady() {
+        return mailSender != null;
+    }
 
     @Value("${mail.from:noreply@norcalmensretreat.com}")
     private String fromEmail;
@@ -51,6 +62,10 @@ public class EmailService {
      *  wrap this in try/catch (they already do). */
     private void sendAndLog(String category, SimpleMailMessage message,
                             String relatedType, Long relatedId) {
+        if (mailSender == null) {
+            throw new IllegalStateException("Email service is not configured — JavaMailSender bean was not created at startup. " +
+                    "Check MAIL_HOST/MAIL_USERNAME/MAIL_PASSWORD env vars on Railway, then see boot log 'MAIL DIAGNOSTIC:'.");
+        }
         String to = (message.getTo() != null && message.getTo().length > 0)
                 ? message.getTo()[0] : "";
         String subj = message.getSubject();
