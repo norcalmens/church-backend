@@ -20,22 +20,28 @@ import java.util.stream.Collectors;
 
 /** Always registered so callers don't need to check for a missing bean —
  *  {@link #isReady()} tells them whether outbound mail is configured, and
- *  every send method throws IllegalStateException when it isn't. Uses
- *  ObjectProvider for the JavaMailSender so classpath/auto-config ordering
- *  can't skip this bean the way {@code @ConditionalOnBean} used to. */
+ *  every send method throws IllegalStateException when it isn't.
+ *
+ *  Transport preference (per attempt): Resend HTTPS API when RESEND_API_KEY
+ *  is set, otherwise the classic JavaMailSender SMTP path. Resend is
+ *  preferred because Railway blocks outbound SMTP ports (25/465/587) but
+ *  never blocks HTTPS. */
 @Slf4j
 @Service
 public class EmailService {
 
     private final JavaMailSender mailSender; // null when Spring Boot didn't autoconfigure one
+    private final ResendMailer resend;       // never null; check resend.isReady()
 
-    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider) {
+    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider,
+                        ResendMailer resend) {
         this.mailSender = mailSenderProvider.getIfAvailable();
+        this.resend = resend;
     }
 
-    /** True when JavaMailSender was autoconfigured (spring.mail.host set + starter present). */
+    /** True when at least one transport is configured. */
     public boolean isReady() {
-        return mailSender != null;
+        return resend.isReady() || mailSender != null;
     }
 
     @Value("${mail.from:noreply@norcalmensretreat.com}")
@@ -62,19 +68,26 @@ public class EmailService {
      *  wrap this in try/catch (they already do). */
     private void sendAndLog(String category, SimpleMailMessage message,
                             String relatedType, Long relatedId) {
-        if (mailSender == null) {
-            throw new IllegalStateException("Email service is not configured — JavaMailSender bean was not created at startup. " +
-                    "Check MAIL_HOST/MAIL_USERNAME/MAIL_PASSWORD env vars on Railway, then see boot log 'MAIL DIAGNOSTIC:'.");
+        if (!isReady()) {
+            throw new IllegalStateException("Email service is not configured — neither RESEND_API_KEY nor MAIL_HOST is set. " +
+                    "See boot log 'MAIL DIAGNOSTIC:' for what Spring picked up.");
         }
         String to = (message.getTo() != null && message.getTo().length > 0)
                 ? message.getTo()[0] : "";
         String subj = message.getSubject();
         String body = message.getText();
+        Runnable dispatch = () -> {
+            if (resend.isReady()) {
+                resend.send(message);
+            } else {
+                mailSender.send(message);
+            }
+        };
         if (emailLog != null) {
             emailLog.wrap(category, to, subj, body, relatedType, relatedId, null,
-                    v -> mailSender.send(message));
+                    v -> dispatch.run());
         } else {
-            mailSender.send(message);
+            dispatch.run();
         }
     }
 
