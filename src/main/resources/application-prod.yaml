@@ -18,6 +18,26 @@ spring:
       hibernate:
         format_sql: false
 
+ # Mail: reads the MAIL_* env vars that are already set on Railway.
+ # Spring Boot only autoconfigures JavaMailSender when spring.mail.host
+ # has a value, so an unset MAIL_HOST leaves email disabled (EmailService
+ # bean skipped) without crashing startup. Callers that need email fall
+ # back to their own error handling.
+ mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_STARTTLS_ENABLE:true}
+            required: ${MAIL_STARTTLS_REQUIRED:false}
+          ssl:
+            enable: ${MAIL_SSL_ENABLE:false}
+
  logging:
   level:
     com.norcalretreat: INFO
