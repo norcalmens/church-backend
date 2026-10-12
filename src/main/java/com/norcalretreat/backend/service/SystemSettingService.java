@@ -25,6 +25,14 @@ public class SystemSettingService {
     public static final String KEY_SOCIAL_SHOW_INSTAGRAM = "social.instagram.show";
     public static final String KEY_SOCIAL_SHOW_YOUTUBE   = "social.youtube.show";
     public static final String KEY_THEME                 = "theme.name";
+    /** The retreat's event theme — the tagline/motif displayed under the
+     *  retreat name on the home hero and itinerary subtitle. Updated once
+     *  per year as the theme changes; every surface reads from this so a
+     *  single change propagates site-wide. Default: "Forged By Fire". */
+    public static final String KEY_RETREAT_THEME_NAME    = "retreat.theme.name";
+    /** Scripture reference paired with the retreat theme (e.g. "1 Peter 1:7"
+     *  for Forged By Fire). Shown in parentheses after the theme name. */
+    public static final String KEY_RETREAT_THEME_SCRIPTURE = "retreat.theme.scripture";
 
     private final SystemSettingRepository repo;
 

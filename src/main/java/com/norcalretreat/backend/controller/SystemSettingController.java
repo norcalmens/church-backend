@@ -80,6 +80,39 @@ public class SystemSettingController {
         return ResponseEntity.ok(ApiResponse.success("Active retreat year updated", out));
     }
 
+    // Retreat theme — single source of truth for the event theme name/scripture.
+    // Home hero + itinerary subtitle (anywhere "Forged By Fire (1 Peter 1:7)"
+    // currently appears) read from this, so admins update once per year.
+    @GetMapping("/public/retreat-theme")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getRetreatTheme() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name",      settingService.get(SystemSettingService.KEY_RETREAT_THEME_NAME).orElse("Forged By Fire"));
+        body.put("scripture", settingService.get(SystemSettingService.KEY_RETREAT_THEME_SCRIPTURE).orElse("1 Peter 1:7"));
+        return ResponseEntity.ok(ApiResponse.success(body));
+    }
+
+    @PutMapping("/retreat-theme")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setRetreatTheme(@RequestBody Map<String, Object> body) {
+        String name = body.get("name") == null ? "" : body.get("name").toString().trim();
+        if (name.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("name is required"));
+        }
+        if (name.length() > 80) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("name must be 80 characters or fewer"));
+        }
+        settingService.set(SystemSettingService.KEY_RETREAT_THEME_NAME, name);
+        // Scripture is optional — pass empty/null to clear the reference.
+        String scripture = body.get("scripture") == null ? "" : body.get("scripture").toString().trim();
+        if (scripture.length() > 60) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("scripture must be 60 characters or fewer"));
+        }
+        settingService.set(SystemSettingService.KEY_RETREAT_THEME_SCRIPTURE, scripture);
+        Map<String, Object> out = new HashMap<>();
+        out.put("name", name);
+        out.put("scripture", scripture);
+        return ResponseEntity.ok(ApiResponse.success("Retreat theme updated", out));
+    }
+
     // Public read of social-media settings so the footer / topbar icons
     // resolve to the live values without admin auth.
     //   enabled         -- master switch (default off). When false the
