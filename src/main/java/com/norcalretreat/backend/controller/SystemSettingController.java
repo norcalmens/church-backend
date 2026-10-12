@@ -154,7 +154,7 @@ public class SystemSettingController {
     // running UI (the frontend would just not match a .theme-<id> class).
     private static final java.util.Set<String> VALID_THEMES = java.util.Set.of(
             "sunrise", "forest", "pacific", "vintage", "slate", "sage",
-            "sunset", "midnight", "cardinal", "indigo", "harvest");
+            "sunset", "midnight", "cardinal", "indigo", "harvest", "forged");
     private static final String DEFAULT_THEME = "sunrise";
 
     @GetMapping("/public/theme")
