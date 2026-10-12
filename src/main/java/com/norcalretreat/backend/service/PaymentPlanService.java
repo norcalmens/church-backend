@@ -355,6 +355,16 @@ public class PaymentPlanService {
                                         .build())
                                 .build())
                         .build())
+                // Session metadata is only on the Checkout Session object itself —
+                // Stripe does NOT copy it to the Subscription or its Invoices. We stamp
+                // the same metadata on the subscription (via SubscriptionData) so the
+                // invoice.payment_succeeded handler can recover the plan even when the
+                // event arrives before checkout.session.completed (a common race).
+                .setSubscriptionData(SessionCreateParams.SubscriptionData.builder()
+                        .putMetadata("type", "payment_plan_subscription")
+                        .putMetadata("plan_id", String.valueOf(plan.getId()))
+                        .putMetadata("payer_token", plan.getPayerToken())
+                        .build())
                 .putMetadata("type", "payment_plan_subscription")
                 .putMetadata("plan_id", String.valueOf(plan.getId()))
                 .putMetadata("payer_token", plan.getPayerToken())
@@ -413,14 +423,19 @@ public class PaymentPlanService {
         log.info("Activated recurring subscription {} on plan {} (${}/mo)", plan.getStripeSubscriptionId(), plan.getId(), plan.getRecurringAmount());
     }
 
-    /** Called by webhook on invoice.payment_succeeded. Records the recurring charge as a paid Payment. */
+    /** Called by webhook on invoice.payment_succeeded. Records the recurring charge as a paid Payment.
+     *
+     *  Lookup is defensive because Stripe can deliver invoice.payment_succeeded BEFORE
+     *  checkout.session.completed (the latter is what originally sets stripeSubscriptionId
+     *  on the plan). On that race, the direct lookup misses, so we fall back to subscription
+     *  metadata (stamped at checkout) and finally to matching the Stripe customer email
+     *  against an unlinked plan. Either fallback lazy-links the plan so future events use
+     *  the fast path. */
     @Transactional
     public void handleInvoicePaid(Invoice invoice) {
         String subId = invoice.getSubscription();
         if (subId == null) return; // not a subscription invoice
-        PaymentPlan plan = plans.findAll().stream()
-                .filter(p -> subId.equals(p.getStripeSubscriptionId()))
-                .findFirst().orElse(null);
+        PaymentPlan plan = findPlanForSubscription(subId);
         if (plan == null) { log.warn("Invoice {} for unknown subscription {}", invoice.getId(), subId); return; }
 
         // Idempotency: skip if we already have a payment for this invoice charge
@@ -469,13 +484,164 @@ public class PaymentPlanService {
     @Transactional
     public void handleSubscriptionStatusChanged(Subscription sub) {
         if (sub == null || sub.getId() == null) return;
-        PaymentPlan plan = plans.findAll().stream()
-                .filter(p -> sub.getId().equals(p.getStripeSubscriptionId()))
-                .findFirst().orElse(null);
+        PaymentPlan plan = findPlanForSubscription(sub.getId());
         if (plan == null) return;
         plan.setRecurringStatus(sub.getStatus()); // active | past_due | canceled | unpaid | trialing
         plans.save(plan);
         log.info("Synced subscription {} status -> {} on plan {}", sub.getId(), sub.getStatus(), plan.getId());
+    }
+
+    /** Three-tier lookup: direct ID, then subscription metadata (set at checkout),
+     *  then Stripe customer email vs unlinked plan payer_email. Both fallbacks
+     *  lazy-link the subscription so the next event uses the fast path. */
+    private PaymentPlan findPlanForSubscription(String subId) {
+        if (subId == null) return null;
+        PaymentPlan direct = plans.findAll().stream()
+                .filter(p -> subId.equals(p.getStripeSubscriptionId()))
+                .findFirst().orElse(null);
+        if (direct != null) return direct;
+
+        try {
+            Subscription sub = Subscription.retrieve(subId);
+            // Tier 2: metadata stamped at checkout creation
+            if (sub.getMetadata() != null) {
+                String planIdStr = sub.getMetadata().get("plan_id");
+                if (planIdStr != null) {
+                    PaymentPlan byId = plans.findById(Long.parseLong(planIdStr)).orElse(null);
+                    if (byId != null) {
+                        lazyLinkSubscription(byId, sub);
+                        log.info("Linked subscription {} to plan {} via metadata fallback", subId, byId.getId());
+                        return byId;
+                    }
+                }
+            }
+            // Tier 3: match the Stripe customer email against an unlinked plan.
+            // Only matches when exactly one plan with no sub ID has the same payer email,
+            // to avoid wrongly crediting a different plan for the same payer.
+            String customerId = sub.getCustomer();
+            if (customerId != null) {
+                com.stripe.model.Customer customer = com.stripe.model.Customer.retrieve(customerId);
+                String email = customer.getEmail();
+                if (email != null && !email.isBlank()) {
+                    List<PaymentPlan> candidates = plans.findAll().stream()
+                            .filter(p -> p.getStripeSubscriptionId() == null)
+                            .filter(p -> email.equalsIgnoreCase(p.getPayerEmail()))
+                            .toList();
+                    if (candidates.size() == 1) {
+                        PaymentPlan match = candidates.get(0);
+                        lazyLinkSubscription(match, sub);
+                        log.info("Linked subscription {} to plan {} via customer-email fallback ({})", subId, match.getId(), email);
+                        return match;
+                    } else if (candidates.size() > 1) {
+                        log.warn("Multiple unlinked plans for payer {} — cannot auto-link subscription {}", email, subId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not resolve subscription {} via Stripe API: {}", subId, e.getMessage());
+        }
+        return null;
+    }
+
+    private void lazyLinkSubscription(PaymentPlan plan, Subscription sub) {
+        plan.setStripeSubscriptionId(sub.getId());
+        plan.setStripeCustomerId(sub.getCustomer());
+        plan.setRecurringStatus(sub.getStatus() != null ? sub.getStatus() : "active");
+        if (plan.getRecurringStartedAt() == null) {
+            plan.setRecurringStartedAt(java.time.LocalDateTime.now());
+        }
+        if (plan.getRecurringAmount() == null && sub.getItems() != null
+                && sub.getItems().getData() != null && !sub.getItems().getData().isEmpty()) {
+            var price = sub.getItems().getData().get(0).getPrice();
+            if (price != null && price.getUnitAmount() != null) {
+                plan.setRecurringAmount(BigDecimal.valueOf(price.getUnitAmount()).divide(BigDecimal.valueOf(100)));
+            }
+        }
+        plans.save(plan);
+    }
+
+    /** Admin-triggered: pull every paid invoice for a plan's Stripe subscription and
+     *  record any that aren't already in the DB. Fixes historical missed charges
+     *  (e.g. the first subscription-creation invoice that got dropped by the race
+     *  condition). Also lazy-links the subscription if the plan isn't linked yet
+     *  but a matching one exists in Stripe for the payer's email. */
+    @Transactional
+    public int syncStripePaymentsForPlan(Long planId) throws StripeException {
+        PaymentPlan plan = plans.findById(planId)
+                .orElseThrow(() -> new IllegalArgumentException("PaymentPlan not found: " + planId));
+
+        String subId = plan.getStripeSubscriptionId();
+        if (subId == null) {
+            // Try to find a subscription in Stripe by customer email so admin can recover
+            // a plan that never completed the checkout.session.completed webhook linkage.
+            subId = findSubscriptionIdByPayerEmail(plan.getPayerEmail());
+            if (subId == null) {
+                throw new IllegalStateException("No Stripe subscription linked to this plan, and none found in Stripe for " + plan.getPayerEmail());
+            }
+            Subscription sub = Subscription.retrieve(subId);
+            lazyLinkSubscription(plan, sub);
+        }
+
+        Map<String, Object> listParams = new HashMap<>();
+        listParams.put("subscription", subId);
+        listParams.put("limit", 100L);
+        com.stripe.model.InvoiceCollection invoices = com.stripe.model.Invoice.list(listParams);
+
+        int added = 0;
+        List<PaymentPlanPayment> existing = payments.findByPlanIdOrderByPaidAtDesc(plan.getId());
+        for (Invoice inv : invoices.getData()) {
+            if (!"paid".equalsIgnoreCase(inv.getStatus())) continue;
+            String ref = inv.getCharge() != null ? inv.getCharge() : inv.getPaymentIntent();
+            if (ref == null) continue;
+            boolean dup = existing.stream().anyMatch(p -> ref.equals(p.getStripePaymentId()));
+            if (dup) continue;
+
+            BigDecimal amount = BigDecimal.valueOf(inv.getAmountPaid()).divide(BigDecimal.valueOf(100));
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            PaymentPlanPayment p = new PaymentPlanPayment();
+            p.setPlanId(plan.getId());
+            p.setAmount(amount);
+            p.setMethod("stripe");
+            p.setStatus("paid");
+            p.setStripePaymentId(ref);
+            p.setReference("Recurring invoice " + (inv.getNumber() != null ? inv.getNumber() : inv.getId()));
+            // Prefer the invoice's actual paid timestamp when available
+            if (inv.getStatusTransitions() != null && inv.getStatusTransitions().getPaidAt() != null) {
+                p.setPaidAt(java.time.LocalDateTime.ofEpochSecond(inv.getStatusTransitions().getPaidAt(), 0, java.time.ZoneOffset.UTC));
+            } else {
+                p.setPaidAt(java.time.LocalDateTime.now());
+            }
+            payments.save(p);
+            added++;
+            log.info("Backfilled ${} on plan {} from invoice {}", amount, plan.getId(), inv.getId());
+        }
+        if (added > 0) maybeMarkCompleted(plan);
+        return added;
+    }
+
+    private String findSubscriptionIdByPayerEmail(String email) {
+        if (email == null || email.isBlank()) return null;
+        try {
+            Map<String, Object> params = new HashMap<>();
+            params.put("email", email);
+            params.put("limit", 10L);
+            com.stripe.model.CustomerCollection customers = com.stripe.model.Customer.list(params);
+            for (com.stripe.model.Customer c : customers.getData()) {
+                Map<String, Object> subParams = new HashMap<>();
+                subParams.put("customer", c.getId());
+                subParams.put("limit", 10L);
+                com.stripe.model.SubscriptionCollection subs = com.stripe.model.Subscription.list(subParams);
+                for (com.stripe.model.Subscription s : subs.getData()) {
+                    if (!"canceled".equalsIgnoreCase(s.getStatus()) && !"incomplete_expired".equalsIgnoreCase(s.getStatus())) {
+                        return s.getId();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not search Stripe for subscription by email {}: {}", email, e.getMessage());
+        }
+        return null;
     }
 
     @Transactional

@@ -60,6 +60,27 @@ public class PaymentPlanController {
         catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("message", e.getMessage())); }
     }
 
+    /** Admin: pull every paid invoice for this plan's Stripe subscription and
+     *  record anything we don't already have. Fixes historical cases where
+     *  invoice.payment_succeeded was dropped due to the Stripe event-ordering
+     *  race against checkout.session.completed. Also lazy-links the subscription
+     *  if the plan was never linked, by searching Stripe for the payer's email. */
+    @PostMapping("/{id}/sync-stripe")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<?> syncStripe(@PathVariable Long id) {
+        try {
+            int added = service.syncStripePaymentsForPlan(id);
+            return ResponseEntity.ok(Map.of("recorded", added));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("syncStripe failed for plan {}", id, e);
+            return ResponseEntity.status(502).body(Map.of("message", "Stripe sync failed: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/{id}/resend-invite")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<?> resendInvite(@PathVariable Long id) {
