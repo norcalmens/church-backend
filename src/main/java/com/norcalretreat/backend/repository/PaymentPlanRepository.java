@@ -17,6 +17,19 @@ public interface PaymentPlanRepository extends JpaRepository<PaymentPlan, Long> 
 
     Optional<PaymentPlan> findByPayerToken(String payerToken);
 
+    /** Active + completed plans — the ones that count as "attending" for the
+     *  admin's merged registrations view. Ordered newest first so recent
+     *  signups surface at the top of the list. */
+    @Query("SELECT p FROM PaymentPlan p WHERE LOWER(p.status) IN ('active', 'completed') " +
+           "ORDER BY p.createdAt DESC")
+    List<PaymentPlan> findAttendingPlans();
+
+    /** Same filter, scoped to a single retreat year. */
+    @Query("SELECT p FROM PaymentPlan p WHERE p.retreatYear = :year " +
+           "AND LOWER(p.status) IN ('active', 'completed') " +
+           "ORDER BY p.createdAt DESC")
+    List<PaymentPlan> findAttendingPlansByYear(@Param("year") int year);
+
     /** Total overnight beds reserved by ACTIVE or COMPLETED plans in a
      *  given season. Requested plans are excluded (still provisional);
      *  canceled plans are excluded (no longer attending). Returns 0 if

@@ -325,18 +325,63 @@ public class RegistrationService {
     }
 
     public List<RegistrationDTO> getAllRegistrations() {
-        return registrationRepository.findAll().stream()
+        List<RegistrationDTO> rows = new java.util.ArrayList<>(registrationRepository.findAll().stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList());
+        // Merge in active + completed payment plans so the admin "All
+        // Registrations" view shows everyone who's attending, regardless of
+        // whether they paid up front or set up a plan. Pending/requested/
+        // cancelled plans are excluded by the repository query.
+        for (com.norcalretreat.backend.entity.PaymentPlan plan : paymentPlanRepository.findAttendingPlans()) {
+            rows.add(planToRegistrationRow(plan));
+        }
+        return rows;
     }
 
     /** Registrations for a single season. Frontend passes retreatYear
      *  explicitly so the admin can review 2026's roster from the same
      *  table without a schema fork. */
     public List<RegistrationDTO> getRegistrationsByYear(int year) {
-        return registrationRepository.findByRetreatYear(year).stream()
+        List<RegistrationDTO> rows = new java.util.ArrayList<>(registrationRepository.findByRetreatYear(year).stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList());
+        for (com.norcalretreat.backend.entity.PaymentPlan plan : paymentPlanRepository.findAttendingPlansByYear(year)) {
+            rows.add(planToRegistrationRow(plan));
+        }
+        return rows;
+    }
+
+    /** Projects a PaymentPlan onto the RegistrationDTO shape used by the
+     *  admin registrations table. Fills only the fields a plan actually
+     *  has (name/email/amount/year/overnight count); leaves attendee-level
+     *  structure (meals, days, linens) null since plans don't capture it.
+     *  Marks source="payment_plan" so the UI can tag the row and link
+     *  through to /admin/payment-plans/{planId}. */
+    private RegistrationDTO planToRegistrationRow(com.norcalretreat.backend.entity.PaymentPlan plan) {
+        RegistrationDTO row = new RegistrationDTO();
+        row.setSource("payment_plan");
+        row.setPlanId(plan.getId());
+        row.setId(plan.getId()); // reuse plan id as row id; namespaced by source
+        // Split "First Last" into first/last so sorting + display match the
+        // registration rows. Fallback: whole name in firstName if no space.
+        String payer = plan.getPayerName() == null ? "" : plan.getPayerName().trim();
+        int sp = payer.indexOf(' ');
+        if (sp > 0) {
+            row.setFirstName(payer.substring(0, sp).trim());
+            row.setLastName(payer.substring(sp + 1).trim());
+        } else {
+            row.setFirstName(payer);
+            row.setLastName("");
+        }
+        row.setEmail(plan.getPayerEmail());
+        row.setTotalAmount(plan.getTotalAmount());
+        row.setPaymentStatus(plan.getStatus());  // "active" or "completed"
+        row.setRetreatYear(plan.getRetreatYear());
+        row.setRegisteredAt(plan.getCreatedAt());
+        int overnight = plan.getOvernightAttendees() == null ? 1 : plan.getOvernightAttendees();
+        row.setAttendeeCount(overnight);
+        row.setAttendees(List.of()); // no granular attendee rows for plans
+        return row;
     }
 
     public Map<String, Object> getStats() {

@@ -42,4 +42,15 @@ public class RegistrationDTO {
     private Integer positionLast;
     private Integer totalAttendees;
     private Integer capacity;
+
+    /** Where this row came from: "registration" (default) or "payment_plan".
+     *  The admin All Registrations view merges active + completed payment
+     *  plans into the list so the planning team sees everyone who's attending
+     *  in one place. Null/absent means "registration" (preserves the legacy
+     *  shape for all other callers). */
+    private String source;
+
+    /** When source=="payment_plan", the id of the originating PaymentPlan so
+     *  the UI can link through to its detail/edit view. Null otherwise. */
+    private Long planId;
 }
